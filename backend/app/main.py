@@ -9,16 +9,16 @@ edp.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="EDP AI Platform 2026", version="2.0.0")
 
-# --- SECURITY FIX: ระบุ Origin ให้ชัดเจน ---
+# --- SECURITY FIX: ระบุ Origin ให้ชัดเจนเพื่ออนุญาต Frontend บน Cloud ---
 origins = [
-    "http://localhost:5173", # พอร์ต Default ของ Vite/React
-    "http://localhost:3000", # เผื่อใช้ Next.js หรืออื่นๆ
-    # "https://your-production-domain.com" # ใส่โดเมนจริงเมื่อขึ้น Server
+    "http://localhost:5173",          # สำหรับทดสอบในเครื่อง (Vite)
+    "http://localhost:3000",          # เผื่อใช้พอร์ตอื่นๆ
+    "https://frontend-production-2c59.up.railway.app" # ✅ โดเมนจริงของคุณบน Railway
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, # เปลี่ยนจาก ["*"] เป็น origins
+    allow_origins=origins,            # อนุญาตเฉพาะโดเมนในรายการด้านบน
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
