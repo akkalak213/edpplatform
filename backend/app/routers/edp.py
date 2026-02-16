@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from datetime import datetime, timezone
 from typing import List
-
+from sqlalchemy import func
 from app.database import get_db
 from app.models.edp import EdpStep, Project, User
 from app.schemas.edp import (
@@ -38,14 +38,15 @@ def get_dashboard_stats(
     total_students = db.query(User).filter(User.role == 'student').count()
     total_projects = db.query(Project).count()
     
-    # นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
+    # [FIXED] นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
+    # ใช้ func.coalesce เพื่อเช็คคะแนนครูก่อน ถ้าไม่มีค่อยใช้คะแนน AI
     completed_projects = db.query(Project).join(EdpStep).filter(
         EdpStep.step_number == 6,
-        EdpStep.score >= 60
+        func.coalesce(EdpStep.teacher_score, EdpStep.score) >= 60
     ).count()
 
-    # คะแนนเฉลี่ยรวมทุก Step ของทุกคน
-    avg_score = db.query(func.avg(EdpStep.score)).scalar() or 0.0
+    # คะแนนเฉลี่ยรวมทุก Step ของทุกคน (แก้ให้คิดคะแนนครูด้วยเช่นกัน)
+    avg_score = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score))).scalar() or 0.0
 
     # การกระจายตัวของนักเรียนในแต่ละห้อง
     students = db.query(User).filter(User.role == 'student').all()

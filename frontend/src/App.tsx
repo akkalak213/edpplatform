@@ -9,6 +9,9 @@ import ForgotPassword from './pages/ForgotPassword';
 import TeacherDashboard from './pages/TeacherDashboard';
 import TeacherProjectDetail from './pages/TeacherProjectDetail';
 
+// [NEW] Import ยามเฝ้าประตู
+import ProtectedRoute from './components/ProtectedRoute';
+
 function App() {
   return (
     <BrowserRouter>
@@ -18,13 +21,20 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         
-        {/* Student Routes */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/project/:id" element={<ProjectDetail />} />
+        {/* === โซนต้องห้าม (ต้อง Login ก่อนถึงจะเข้าได้) === */}
+        
+        {/* 1. สำหรับนักเรียน (Role: student) */}
+        <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/project/:id" element={<ProjectDetail />} />
+        </Route>
 
-        {/* [NEW] Teacher Routes */}
-        <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
-        <Route path="/teacher/project/:id" element={<TeacherProjectDetail />} />
+        {/* 2. สำหรับครู (Role: teacher) */}
+        <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
+          <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+          <Route path="/teacher/project/:id" element={<TeacherProjectDetail />} />
+        </Route>
+
       </Routes>
     </BrowserRouter>
   );
