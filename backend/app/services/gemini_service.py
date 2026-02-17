@@ -2,9 +2,16 @@ import google.generativeai as genai
 import os
 import json
 import re
+import asyncio
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.api_core import exceptions
 
 load_dotenv()
+
+# [วิธีที่ 2] สร้าง Semaphore เพื่อจำกัดการเรียก AI พร้อมกันไม่เกิน 5 Request
+# (คนที่ 6 เป็นต้นไปจะต้องรอใน Server เราก่อน ไม่ส่งไป Google เพื่อกัน Error 429)
+gemini_semaphore = asyncio.Semaphore(5)
 
 class GeminiService:
     def __init__(self):
@@ -13,11 +20,11 @@ class GeminiService:
             print("Warning: GEMINI_API_KEY not found in .env")
         else:
             genai.configure(api_key=api_key)
-            # ✅ ใช้ gemini-2.5-flash ตามคำสั่ง (โมเดลใหม่ล่าสุด)
+            # ✅ ใช้โมเดลเดิมของคุณ 100%
             self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     async def analyze_step(self, step_number: int, content: str) -> dict:
-        # 1. Validation
+        # 1. Validation (เหมือนเดิม)
         if not content or len(content.strip()) < 10:
             return {
                 "relevance_score": 0,
@@ -26,7 +33,7 @@ class GeminiService:
                 "warning_flags": ["too_short"]
             }
 
-        # 2. Rubric Definition (เกณฑ์ละเอียด 4 ด้าน สำหรับทำตารางคะแนน)
+        # 2. Rubric Definition (เหมือนเดิม)
         rubrics = {
             1: [
                 "ความชัดเจนของปัญหา (Clarity) - ปัญหาคืออะไร เกิดกับใคร",
@@ -68,7 +75,7 @@ class GeminiService:
         
         current_rubric = rubrics.get(step_number, ["เกณฑ์ที่ 1", "เกณฑ์ที่ 2", "เกณฑ์ที่ 3", "เกณฑ์ที่ 4"])
         
-        # 3. Prompt (สั่งให้ AI ตอบกลับมาเป็น JSON ที่มี score_breakdown)
+        # 3. Prompt (เหมือนเดิมเป๊ะ)
         prompt = f"""
         Act as a strict Senior Engineering Professor evaluating a student's EDP project submission (Step {step_number}).
         Student Input: "{content}"
@@ -102,44 +109,62 @@ class GeminiService:
             "suggested_action": "(Specific advice on what to do next)"
         }}
         """
-        
-        try:
-            # เรียกใช้ Model gemini-2.5-flash ตามที่ต้องการ
-            response = await self.model.generate_content_async(prompt)
-            raw_text = response.text
-            
-            # 4. Cleaning & Parsing
-            clean_text = re.sub(r'```json\s*', '', raw_text)
-            clean_text = re.sub(r'```\s*', '', clean_text)
-            match = re.search(r'\{.*\}', clean_text, re.DOTALL)
-            
-            if match:
-                result = json.loads(match.group())
-                
-                # ตรวจสอบและคำนวณคะแนนรวมใหม่เพื่อความชัวร์
-                if "score_breakdown" in result:
-                    total = sum(item.get("score", 0) for item in result["score_breakdown"])
-                    result["relevance_score"] = total
-                
-                # เติมค่า Default ป้องกัน Error
-                if "warning_flags" not in result: result["warning_flags"] = []
-                if "feedback_th" not in result: result["feedback_th"] = "ระบบไม่สามารถสรุปคำแนะนำได้"
 
-                return result
-            else:
-                print(f"JSON Parse Error: {raw_text}")
+        # [วิธีที่ 1 & 2 รวมร่าง] เรียกผ่านฟังก์ชันที่มี Retry และ Semaphore
+        # ส่ง prompt เข้าไปทำงาน
+        return await self._generate_with_retry_and_limit(prompt)
+
+    # ---------------------------------------------------------
+    # ฟังก์ชันใหม่: แยกออกมาเพื่อทำ Retry Logic โดยเฉพาะ
+    # ---------------------------------------------------------
+    @retry(
+        stop=stop_after_attempt(5),             # ลองใหม่ได้สูงสุด 5 ครั้ง
+        wait=wait_exponential(multiplier=1, min=2, max=10), # รอแบบทวีคูณ (2วิ, 4วิ, 8วิ...)
+        retry=retry_if_exception_type(exceptions.ResourceExhausted) # ทำเฉพาะเมื่อเจอ Error 429
+    )
+    async def _generate_with_retry_and_limit(self, prompt: str):
+        # ใช้ Semaphore จำกัดคนเข้าพร้อมกัน (Concurrency Limit)
+        async with gemini_semaphore:
+            try:
+                # เรียกใช้ Model ตัวเดิมของคุณ
+                response = await self.model.generate_content_async(prompt)
+                raw_text = response.text
+                
+                # 4. Cleaning & Parsing logic (เหมือนเดิม)
+                clean_text = re.sub(r'```json\s*', '', raw_text)
+                clean_text = re.sub(r'```\s*', '', clean_text)
+                match = re.search(r'\{.*\}', clean_text, re.DOTALL)
+                
+                if match:
+                    result = json.loads(match.group())
+                    
+                    if "score_breakdown" in result:
+                        total = sum(item.get("score", 0) for item in result["score_breakdown"])
+                        result["relevance_score"] = total
+                    
+                    if "warning_flags" not in result: result["warning_flags"] = []
+                    if "feedback_th" not in result: result["feedback_th"] = "ระบบไม่สามารถสรุปคำแนะนำได้"
+
+                    return result
+                else:
+                    print(f"JSON Parse Error: {raw_text}")
+                    return {
+                        "relevance_score": 0, 
+                        "score_breakdown": [],
+                        "feedback_th": "ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้ง", 
+                        "warning_flags": ["ai_format_error"]
+                    }
+                    
+            except Exception as e:
+                # ถ้าเป็น Error 429 ให้โยน (raise) ออกไปเพื่อให้ @retry ข้างบนทำงาน
+                if "429" in str(e) or isinstance(e, exceptions.ResourceExhausted):
+                    raise e 
+                
+                # ถ้า Error อื่นๆ ให้แจ้งเตือนตามปกติ
+                print(f"Gemini API Error: {e}")
                 return {
                     "relevance_score": 0, 
                     "score_breakdown": [],
-                    "feedback_th": "ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้ง", 
-                    "warning_flags": ["ai_format_error"]
+                    "feedback_th": "เกิดปัญหาการเชื่อมต่อกับ AI (Connection Error) กรุณาลองใหม่", 
+                    "warning_flags": ["connection_error"]
                 }
-                
-        except Exception as e:
-            print(f"Gemini API Error: {e}")
-            return {
-                "relevance_score": 0, 
-                "score_breakdown": [],
-                "feedback_th": "เกิดปัญหาการเชื่อมต่อกับ AI (Connection Error) กรุณาลองใหม่", 
-                "warning_flags": ["connection_error"]
-            }
