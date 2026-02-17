@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { ArrowLeft, Send, Bot, CheckCircle, Loader2, RefreshCw, ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3 } from 'lucide-react';
+import { 
+  ArrowLeft, Send, Bot, CheckCircle, Loader2, RefreshCw, 
+  ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3, Clock 
+} from 'lucide-react';
 
 // --- Interfaces ---
-// [FIX] ย้าย Interface ขึ้นมาด้านบนเพื่อเรียกใช้ใน Component ได้
 interface ScoreItem {
   criteria: string;
   score: number;
@@ -69,7 +71,6 @@ const CopyButton = ({ text }: { text: string }) => {
 };
 
 // --- Score Breakdown Table ---
-// [FIX] เปลี่ยนจาก any[] เป็น ScoreItem[]
 const ScoreTable = ({ breakdown }: { breakdown: ScoreItem[] }) => {
   if (!breakdown || breakdown.length === 0) return null;
 
@@ -142,6 +143,10 @@ export default function ProjectDetail() {
   const [animatingStepId, setAnimatingStepId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // [NEW] Timer State
+  const startTimeRef = useRef<number>(Date.now()); 
+  const [sessionTime, setSessionTime] = useState(0); 
+
   const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
   
   let rawNextStep = 1;
@@ -159,6 +164,18 @@ export default function ProjectDetail() {
 
   const isProcessComplete = rawNextStep > 6;
   const currentStepNumber = isProcessComplete ? 1 : rawNextStep; 
+
+  // [NEW] Timer Logic (Reset when step changes)
+  useEffect(() => {
+    startTimeRef.current = Date.now();
+    setSessionTime(0);
+    
+    const timer = setInterval(() => {
+        setSessionTime(Math.floor((Date.now() - startTimeRef.current) / 1000));
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [currentStepNumber]);
 
   const fetchSteps = useCallback(async () => {
     if (!id) return;
@@ -179,21 +196,36 @@ export default function ProjectDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [steps, submitting, isProcessComplete]);
 
+  // [NEW] Helper Format Time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleSubmit = async () => {
     if (!currentInput.trim()) return;
     
     setSubmitting(true);
+    
+    // [NEW] Calculate time spent
+    const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
+
     try {
       const res = await client.post('/edp/submit', {
         project_id: Number(id),
         step_number: currentStepNumber,
-        content: currentInput
+        content: currentInput,
+        time_spent_seconds: timeSpent // [NEW] Send time to backend
       });
 
       const newStep = res.data;
       setSteps(prev => [...prev, newStep]);
       setCurrentInput('');
       setAnimatingStepId(newStep.id);
+      
+      // [NEW] Reset timer for next round
+      startTimeRef.current = Date.now();
 
     } catch (error) {
       console.error("Submit error:", error);
@@ -214,19 +246,29 @@ export default function ProjectDetail() {
 
       {/* Header */}
       <header className="bg-[#0F172A]/80 backdrop-blur-md border-b border-cyan-500/10 sticky top-0 z-30 shadow-lg">
-        <div className="px-6 py-4 flex items-center gap-4">
-          <button 
-            onClick={() => navigate('/dashboard')} 
-            className="p-2 hover:bg-white/5 rounded-full transition text-slate-400 hover:text-white border border-transparent hover:border-white/10"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="font-bold text-white text-lg flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-cyan-400" />
-              ห้องเรียน AI: <span className="text-cyan-400 font-mono">Module #{id}</span>
-            </h1>
-            <p className="text-[10px] text-slate-500 font-light tracking-wide">ENGINEERING DESIGN PROCESS SYSTEM</p>
+        <div className="px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <button 
+                onClick={() => navigate('/dashboard')} 
+                className="p-2 hover:bg-white/5 rounded-full transition text-slate-400 hover:text-white border border-transparent hover:border-white/10"
+            >
+                <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+                <h1 className="font-bold text-white text-lg flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-cyan-400" />
+                ห้องเรียน AI: <span className="text-cyan-400 font-mono">Module #{id}</span>
+                </h1>
+                <p className="text-[10px] text-slate-500 font-light tracking-wide">ENGINEERING DESIGN PROCESS SYSTEM</p>
+            </div>
+          </div>
+
+          {/* [NEW] Clock Display */}
+          <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800">
+            <Clock className="w-4 h-4 text-cyan-400 animate-pulse" />
+            <span className="text-sm font-mono text-cyan-200 w-12 text-center">
+              {formatTime(sessionTime)}
+            </span>
           </div>
         </div>
         
@@ -279,7 +321,7 @@ export default function ProjectDetail() {
               {(index === 0 || steps[index-1].step_number !== step.step_number) && (
                 <div className="flex items-center justify-center my-8 opacity-70">
                    <div className="bg-[#1E293B] border border-slate-700 text-slate-400 px-4 py-1.5 rounded-full text-xs font-mono tracking-wider shadow-sm">
-                     --- STEP {step.step_number} : {EDP_STEPS[step.step_number-1]?.split('. ')[1]} ---
+                     --- STEP {step.step_number} : {EDP_STEPS[step.step_number-1]?.split('. ')[1] || EDP_STEPS[step.step_number-1]} ---
                    </div>
                 </div>
               )}
@@ -349,7 +391,6 @@ export default function ProjectDetail() {
         {/* Success & Iterate Banner */}
         {isProcessComplete && !submitting && (
           <div className="animate-in zoom-in-95 duration-500 my-8">
-            {/* [FIX] bg-gradient-to-r -> bg-linear-to-r */}
             <div className="bg-linear-to-r from-green-900/30 to-emerald-900/30 border border-green-500/30 rounded-3xl p-8 text-center relative overflow-hidden">
               <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
               <div className="relative z-10">
