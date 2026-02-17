@@ -18,6 +18,9 @@ class User(Base):
     
     role = Column(String, default="student") # student, teacher, admin
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # [FIX] เพิ่มบรรทัดนี้เพื่อให้ Python รู้จักคอลัมน์ใหม่ (แก้ปัญหา Error)
+    last_active_at = Column(DateTime(timezone=True), nullable=True)
 
     # ความสัมพันธ์
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
