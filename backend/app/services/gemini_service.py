@@ -4,14 +4,15 @@ import json
 import re
 import asyncio
 from dotenv import load_dotenv
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+# นำเข้า Library สำหรับจัดการ Retry และ Error
+from tenacity import retry, stop_after_delay, wait_exponential, retry_if_exception_type, RetryError
 from google.api_core import exceptions
 
 load_dotenv()
 
-# [วิธีที่ 2] สร้าง Semaphore เพื่อจำกัดการเรียก AI พร้อมกันไม่เกิน 5 Request
-# (คนที่ 6 เป็นต้นไปจะต้องรอใน Server เราก่อน ไม่ส่งไป Google เพื่อกัน Error 429)
-gemini_semaphore = asyncio.Semaphore(5)
+# [TUNING] ลดจำนวนคนเข้าพร้อมกันเหลือ 3 คน (ปลอดภัยที่สุดสำหรับ Free Tier)
+# ส่วนเกินจะรอในคิวของ Server เรา ไม่ส่งไปชน Google ให้โดนด่า
+gemini_semaphore = asyncio.Semaphore(3)
 
 class GeminiService:
     def __init__(self):
@@ -24,7 +25,7 @@ class GeminiService:
             self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     async def analyze_step(self, step_number: int, content: str) -> dict:
-        # 1. Validation (เหมือนเดิม)
+        # 1. Validation (ตรวจสอบความยาวข้อความ)
         if not content or len(content.strip()) < 10:
             return {
                 "relevance_score": 0,
@@ -33,7 +34,7 @@ class GeminiService:
                 "warning_flags": ["too_short"]
             }
 
-        # 2. Rubric Definition (เหมือนเดิม)
+        # 2. Rubric Definition (เกณฑ์การให้คะแนนฉบับเต็ม)
         rubrics = {
             1: [
                 "ความชัดเจนของปัญหา (Clarity) - ปัญหาคืออะไร เกิดกับใคร",
@@ -75,7 +76,7 @@ class GeminiService:
         
         current_rubric = rubrics.get(step_number, ["เกณฑ์ที่ 1", "เกณฑ์ที่ 2", "เกณฑ์ที่ 3", "เกณฑ์ที่ 4"])
         
-        # 3. Prompt (เหมือนเดิมเป๊ะ)
+        # 3. Prompt (คำสั่งที่ส่งให้ AI ฉบับเต็ม)
         prompt = f"""
         Act as a strict Senior Engineering Professor evaluating a student's EDP project submission (Step {step_number}).
         Student Input: "{content}"
@@ -110,61 +111,63 @@ class GeminiService:
         }}
         """
 
-        # [วิธีที่ 1 & 2 รวมร่าง] เรียกผ่านฟังก์ชันที่มี Retry และ Semaphore
-        # ส่ง prompt เข้าไปทำงาน
-        return await self._generate_with_retry_and_limit(prompt)
+        # [SAFEGUARD] เรียกผ่านฟังก์ชัน Retry พร้อมดัก Error สุดท้ายไม่ให้ Server ล่ม (Error 500)
+        try:
+            return await self._generate_with_retry_and_limit(prompt)
+        except RetryError:
+            # ถ้าตื้อจนครบเวลาแล้วยังไม่ได้ (แปลว่า Google ไม่ยอมจริงๆ)
+            print("Gemini Quota Exceeded: Max retries reached.")
+            return {
+                "relevance_score": 0,
+                "score_breakdown": [],
+                "feedback_th": "⚠️ ขณะนี้มีผู้ใช้งานจำนวนมาก ระบบ AI กำลังประมวลผลไม่ทัน กรุณารอ 1-2 นาทีแล้วกดส่งใหม่อีกครั้งครับ",
+                "warning_flags": ["quota_exceeded"]
+            }
+        except Exception as e:
+            print(f"Unexpected Error in analyze_step: {e}")
+            return {
+                "relevance_score": 0,
+                "score_breakdown": [],
+                "feedback_th": "เกิดข้อผิดพลาดทางเทคนิค กรุณาลองใหม่อีกครั้ง",
+                "warning_flags": ["system_error"]
+            }
 
     # ---------------------------------------------------------
-    # ฟังก์ชันใหม่: แยกออกมาเพื่อทำ Retry Logic โดยเฉพาะ
+    # ฟังก์ชัน Retry Logic (ปรับจูนให้ "อึด" ขึ้น สู้กับเวลา 56 วินาทีของ Google)
     # ---------------------------------------------------------
     @retry(
-        stop=stop_after_attempt(5),             # ลองใหม่ได้สูงสุด 5 ครั้ง
-        wait=wait_exponential(multiplier=1, min=2, max=10), # รอแบบทวีคูณ (2วิ, 4วิ, 8วิ...)
+        # [TUNING] เปลี่ยนจากนับครั้ง เป็นนับเวลา: ให้พยายามตื้อต่อเนื่องนานสูงสุด 120 วินาที (2 นาที)
+        stop=stop_after_delay(120), 
+        # รอแบบทวีคูณ: เริ่มที่ 4 วิ, แล้วเพิ่มไปเรื่อยๆ สูงสุดรอรอบละ 60 วิ
+        # (สูตรนี้จะช่วยให้เราไม่ Spam ถี่เกินไป จนโดนแบนซ้ำ)
+        wait=wait_exponential(multiplier=2, min=4, max=60),
         retry=retry_if_exception_type(exceptions.ResourceExhausted) # ทำเฉพาะเมื่อเจอ Error 429
     )
     async def _generate_with_retry_and_limit(self, prompt: str):
-        # ใช้ Semaphore จำกัดคนเข้าพร้อมกัน (Concurrency Limit)
+        # ใช้ Semaphore จำกัดคนเข้า (Concurrency Limit)
         async with gemini_semaphore:
-            try:
-                # เรียกใช้ Model ตัวเดิมของคุณ
-                response = await self.model.generate_content_async(prompt)
-                raw_text = response.text
+            # เรียกใช้ Model
+            response = await self.model.generate_content_async(prompt)
+            
+            # Parsing Logic (คงเดิม)
+            clean_text = re.sub(r'```json\s*', '', response.text)
+            clean_text = re.sub(r'```\s*', '', clean_text)
+            match = re.search(r'\{.*\}', clean_text, re.DOTALL)
+            
+            if match:
+                result = json.loads(match.group())
+                # Recalculate Score for safety
+                if "score_breakdown" in result:
+                    result["relevance_score"] = sum(item.get("score", 0) for item in result["score_breakdown"])
                 
-                # 4. Cleaning & Parsing logic (เหมือนเดิม)
-                clean_text = re.sub(r'```json\s*', '', raw_text)
-                clean_text = re.sub(r'```\s*', '', clean_text)
-                match = re.search(r'\{.*\}', clean_text, re.DOTALL)
-                
-                if match:
-                    result = json.loads(match.group())
-                    
-                    if "score_breakdown" in result:
-                        total = sum(item.get("score", 0) for item in result["score_breakdown"])
-                        result["relevance_score"] = total
-                    
-                    if "warning_flags" not in result: result["warning_flags"] = []
-                    if "feedback_th" not in result: result["feedback_th"] = "ระบบไม่สามารถสรุปคำแนะนำได้"
-
-                    return result
-                else:
-                    print(f"JSON Parse Error: {raw_text}")
-                    return {
-                        "relevance_score": 0, 
-                        "score_breakdown": [],
-                        "feedback_th": "ระบบไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่อีกครั้ง", 
-                        "warning_flags": ["ai_format_error"]
-                    }
-                    
-            except Exception as e:
-                # ถ้าเป็น Error 429 ให้โยน (raise) ออกไปเพื่อให้ @retry ข้างบนทำงาน
-                if "429" in str(e) or isinstance(e, exceptions.ResourceExhausted):
-                    raise e 
-                
-                # ถ้า Error อื่นๆ ให้แจ้งเตือนตามปกติ
-                print(f"Gemini API Error: {e}")
+                # Default values
+                result.setdefault("warning_flags", [])
+                result.setdefault("feedback_th", "ระบบไม่สามารถสรุปคำแนะนำได้")
+                return result
+            else:
                 return {
                     "relevance_score": 0, 
                     "score_breakdown": [],
-                    "feedback_th": "เกิดปัญหาการเชื่อมต่อกับ AI (Connection Error) กรุณาลองใหม่", 
-                    "warning_flags": ["connection_error"]
+                    "feedback_th": "AI ตอบกลับผิดรูปแบบ กรุณาลองใหม่", 
+                    "warning_flags": ["ai_format_error"]
                 }
