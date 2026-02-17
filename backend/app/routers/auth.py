@@ -1,3 +1,4 @@
+# File: backend/app/routers/auth.py
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,12 +12,12 @@ from app.models.edp import User
 from app.core import security
 
 # ==========================================
-# 🔑 CONFIGURATION (กำหนดกุญแจที่นี่ที่เดียว จบปัญหา)
+# 🔑 CONFIGURATION (Key Configuration)
 # ==========================================
-# [FIX] ใส่ Key เดิมกลับมาให้แล้วครับ
+# [FIX] Kept the original key as requested
 SECRET_KEY = "sdmmgkamdjjjdJJNJsafnDLKsmfknSJDFndsjZNJKFD*-*324242dsa"  
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 วัน
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 day
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -32,7 +33,7 @@ class UserRegister(BaseModel):
     last_name: str
     class_room: str
 
-# --- 🛠️ INTERNAL FUNCTIONS (สร้างและตรวจ Token ในไฟล์นี้เลย) ---
+# --- 🛠️ INTERNAL FUNCTIONS (Create and Verify Token locally) ---
 
 def create_access_token_local(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -62,6 +63,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
+    
+    # [NEW] Update last active time whenever the user interacts with the API
+    user.last_active_at = datetime.now(timezone.utc)
+    db.commit()
+    
     return user
 
 # --- API ENDPOINTS ---
@@ -95,14 +101,14 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 1. หา User
+    # 1. Find User
     user = db.query(User).filter(User.email == form_data.username).first()
     
-    # 2. ตรวจรหัสผ่าน
+    # 2. Check password
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="อีเมลหรือรหัสผ่านไม่ถูกต้อง")
     
-    # 3. สร้าง Token
+    # 3. Create Token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
     access_token = create_access_token_local(
@@ -121,19 +127,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         "role": user.role 
     }
 
-# --- [NEW] ระบบรีเซ็ตรหัสผ่านสำหรับครู ---
+# --- [NEW] Reset Password System for Teachers ---
 @router.post("/reset-password/{student_id}")
 def reset_student_password(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # 1. เช็คว่าเป็นครูไหม (Security Check)
+    # 1. Check if Teacher (Security Check)
     if current_user.role != "teacher":
         raise HTTPException(status_code=403, detail="สำหรับครูเท่านั้น")
     
-    # 2. หานักเรียน
+    # 2. Find Student
     student = db.query(User).filter(User.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="ไม่พบข้อมูลนักเรียน")
         
-    # 3. รีเซ็ตรหัสผ่านเป็น "password123"
+    # 3. Reset password to "password123"
     student.hashed_password = security.get_password_hash("password123")
     db.commit()
     
@@ -145,11 +151,11 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. ตรวจรหัสเดิม
+    # 1. Check old password
     if not security.verify_password(password_data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="รหัสผ่านเดิมไม่ถูกต้อง")
     
-    # 2. เปลี่ยนรหัสใหม่
+    # 2. Change to new password
     current_user.hashed_password = security.get_password_hash(password_data.new_password)
     db.commit()
     

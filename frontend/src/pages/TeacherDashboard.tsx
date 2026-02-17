@@ -5,18 +5,17 @@ import {
   LogOut, LayoutDashboard, Users, FolderOpen, 
   Search, Trash2, Edit2, Save, Key, 
   TrendingUp, Activity, PieChart, GraduationCap, CheckCircle,
-  Clock, Zap} from 'lucide-react';
+  Clock, Signal 
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-// Interfaces (อัปเดตให้ตรงกับ Backend ใหม่)
+// Interfaces
 interface Stats {
   total_students: number;
   total_projects: number;
   completed_projects: number;
   average_score: number;
   class_distribution: Record<string, number>;
-  
-  // [NEW] ฟิลด์ใหม่จาก Backend
   total_active_users: number;
   avg_time_per_step: Record<string, number>;
   student_performance_avg: number;
@@ -30,7 +29,6 @@ interface Student {
   class_room: string;
   email: string;
   project_count: number;
-  // [NEW] คะแนนเฉลี่ยรายคน
   average_score: number;
 }
 
@@ -51,6 +49,7 @@ interface StatCardProps {
   value: string | number;
   icon: LucideIcon;
   colorClass: string;
+  subValue?: string;
 }
 
 export default function TeacherDashboard() {
@@ -68,7 +67,6 @@ export default function TeacherDashboard() {
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', student_id: '', class_room: '' });
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
       const [resStats, resStudents, resProjects] = await Promise.all([
         client.get('/edp/teacher/stats'),
@@ -79,14 +77,19 @@ export default function TeacherDashboard() {
       setStudents(resStudents.data);
       setProjects(resProjects.data);
     } catch (err) {
-      console.error("Fetch Data Error:", err as Error);
-      navigate('/dashboard'); // ถ้าโหลดไม่ได้ให้เด้งออกไปก่อน
+      console.error("Fetch Data Error:", err);
+      navigate('/dashboard');
     } finally {
       setLoading(false);
     }
   }, [navigate]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  // Auto Refresh ทุก 5 วินาที
+  useEffect(() => {
+    fetchData(); 
+    const interval = setInterval(fetchData, 5000); 
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -102,6 +105,7 @@ export default function TeacherDashboard() {
       await client.post(`/auth/reset-password/${studentId}`);
       alert(`✅ รีเซ็ตรหัสผ่านของ "${studentName}" สำเร็จ!\nให้นักเรียนเข้าสู่ระบบด้วยรหัส: password123`);
     } catch (err) {
+      // [FIXED] ลบ any และใช้ Type Casting แทนเพื่อผ่าน ESLint
       const error = err as { response?: { data?: { detail?: string } }; message?: string };
       alert("❌ เกิดข้อผิดพลาด: " + (error.response?.data?.detail || error.message || "Unknown Error"));
     }
@@ -117,7 +121,6 @@ export default function TeacherDashboard() {
 
   const classList = ['All', ...Array.from(new Set(students.map(s => s.class_room))).sort()];
 
-  // Helper สำหรับแปลงเวลา (วินาที -> นาที)
   const formatTime = (seconds: number) => {
     if (!seconds) return "0m";
     const mins = Math.floor(seconds / 60);
@@ -125,20 +128,24 @@ export default function TeacherDashboard() {
   };
 
   // --- Sub-Components ---
-  const StatCard = ({ title, value, icon: Icon, colorClass }: StatCardProps) => {
+  const StatCard = ({ title, value, icon: Icon, colorClass, subValue }: StatCardProps) => {
     const colorMap: Record<string, string> = {
       blue: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
       emerald: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
       purple: 'text-purple-400 bg-purple-500/20 border-purple-500/30',
       orange: 'text-orange-400 bg-orange-500/20 border-orange-500/30',
-      pink: 'text-pink-400 bg-pink-500/20 border-pink-500/30', // สีใหม่
+      pink: 'text-pink-400 bg-pink-500/20 border-pink-500/30',
+      cyan: 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30',
     };
 
     return (
       <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-700 shadow-xl flex items-center justify-between hover:border-slate-500 transition-all group">
         <div>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
-          <h3 className="text-4xl font-extrabold text-white tracking-tight">{value}</h3>
+          <div className="flex items-end gap-2">
+            <h3 className="text-4xl font-extrabold text-white tracking-tight">{value}</h3>
+            {subValue && <span className="text-xs text-slate-500 mb-1.5 font-medium">{subValue}</span>}
+          </div>
         </div>
         <div className={`p-4 rounded-2xl border ${colorMap[colorClass]} group-hover:scale-110 transition-transform`}>
           <Icon className="w-9 h-9" />
@@ -196,23 +203,64 @@ export default function TeacherDashboard() {
         {/* === OVERVIEW TAB === */}
         {activeTab === 'overview' && stats && (
           <div className="space-y-10 animate-in fade-in duration-700">
-            {/* สถิติหลัก 4 ใบ */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              <StatCard title="Active Users" value={stats.total_active_users || stats.total_students} icon={Zap} colorClass="blue" />
+            
+            {/* Row 1: สถิติหลัก (5 ใบ) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+              {/* 1. Active Users (Realtime) */}
+              <StatCard 
+                title="Active Users" 
+                value={stats.total_active_users} 
+                icon={Signal} 
+                colorClass="cyan"
+                subValue="Online"
+              />
+              
+              {/* 2. Total Students */}
+              <StatCard title="นักเรียนทั้งหมด" value={stats.total_students} icon={Users} colorClass="blue" />
+              
+              {/* 3. Total Projects */}
               <StatCard title="โครงงานทั้งหมด" value={stats.total_projects} icon={FolderOpen} colorClass="purple" />
+              
+              {/* 4. Completed Projects */}
               <StatCard title="ผ่านเกณฑ์แล้ว" value={stats.completed_projects} icon={CheckCircle} colorClass="emerald" />
-              <StatCard title="คะแนนเฉลี่ยรวม" value={stats.average_score} icon={TrendingUp} colorClass="orange" />
+              
+              {/* 5. Average Score */}
+              <StatCard title="คะแนนเฉลี่ย" value={stats.average_score} icon={TrendingUp} colorClass="orange" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* [NEW] กราฟเวลาเฉลี่ยแต่ละ Step */}
+              
+              {/* Class Distribution (แบบเดิม Progress Bar) */}
+              <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
+                <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
+                  <PieChart className="w-6 h-6 text-indigo-400"/> จำนวนนักเรียนแยกตามห้อง
+                </h3>
+                <div className="space-y-6">
+                  {Object.entries(stats.class_distribution).sort().map(([cls, count]) => (
+                    <div key={cls} className="group">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-slate-200 font-medium">{cls}</span>
+                        <span className="text-indigo-400 font-bold">{count} คน</span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
+                        <div 
+                          className="bg-indigo-500 h-full rounded-full transition-all duration-1000 group-hover:bg-indigo-400" 
+                          style={{ width: `${(count / (stats.total_students || 1)) * 100}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  ))}
+                  {Object.keys(stats.class_distribution).length === 0 && <div className="text-center text-slate-500">ไม่มีข้อมูลนักเรียน</div>}
+                </div>
+              </div>
+
+              {/* Time per Step Graph (Realtime Data) */}
               <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
                   <Clock className="w-6 h-6 text-pink-400"/> เวลาเฉลี่ยต่อขั้นตอน (นาที)
                 </h3>
                 <div className="space-y-5">
                   {Object.entries(stats.avg_time_per_step || {}).sort().map(([stepName, seconds]) => {
-                    // คำนวณความยาวกราฟ (Max 60 นาที = 3600 วิ)
                     const percent = Math.min((seconds / 3600) * 100, 100); 
                     return (
                       <div key={stepName} className="group">
@@ -223,7 +271,7 @@ export default function TeacherDashboard() {
                         <div className="w-full bg-slate-800 rounded-full h-4 overflow-hidden border border-slate-700 relative">
                           <div 
                             className="bg-pink-500 h-full rounded-full transition-all duration-1000 group-hover:bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.5)]" 
-                            style={{ width: `${Math.max(percent, 5)}%` }} // อย่างน้อย 5% ให้เห็นแท่ง
+                            style={{ width: `${Math.max(percent, 5)}%` }}
                           ></div>
                         </div>
                       </div>
@@ -235,42 +283,6 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* อัตราความสำเร็จ (Circular Chart) */}
-              <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl flex flex-col items-center justify-center">
-                <h3 className="text-xl font-bold text-white mb-2 text-center w-full flex items-center justify-center gap-3">
-                  <Activity className="w-6 h-6 text-emerald-400"/> Success Rate
-                </h3>
-                <div className="relative flex items-center justify-center mt-6">
-                  <svg className="w-48 h-48 transform -rotate-90">
-                    <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-800" />
-                    <circle 
-                      cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="12" fill="transparent" 
-                      strokeDasharray={2 * Math.PI * 80}
-                      strokeDashoffset={2 * Math.PI * 80 * (1 - (stats.completed_projects / (stats.total_projects || 1)))}
-                      className="text-emerald-500 transition-all duration-1000" 
-                    />
-                  </svg>
-                  <div className="absolute text-center">
-                    <div className="text-5xl font-black text-white">{Math.round((stats.completed_projects / (stats.total_projects || 1)) * 100)}%</div>
-                    <div className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mt-1">Completed</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Class Distribution (ย้ายลงมาข้างล่าง) */}
-             <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
-                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-                  <PieChart className="w-6 h-6 text-indigo-400"/> นักเรียนแต่ละห้อง
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {Object.entries(stats.class_distribution).map(([cls, count]) => (
-                    <div key={cls} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex justify-between items-center">
-                      <span className="text-slate-300 font-bold">{cls}</span>
-                      <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-sm font-bold">{count} คน</span>
-                    </div>
-                  ))}
-                </div>
             </div>
           </div>
         )}
@@ -309,7 +321,6 @@ export default function TeacherDashboard() {
                     <th className="p-6">ชื่อ - นามสกุล</th>
                     <th className="p-6">ห้องเรียน</th>
                     <th className="p-6 text-center">จำนวนงาน</th>
-                    {/* [NEW] คอลัมน์คะแนนเฉลี่ย */}
                     <th className="p-6 text-center text-emerald-400">เกรดเฉลี่ย</th> 
                     <th className="p-6 text-right">จัดการข้อมูล</th>
                   </tr>
@@ -322,7 +333,6 @@ export default function TeacherDashboard() {
                       <td className="p-6"><span className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold">{s.class_room}</span></td>
                       <td className="p-6 text-center font-bold text-slate-400">{s.project_count}</td>
                       
-                      {/* [NEW] แสดงคะแนนเฉลี่ย */}
                       <td className="p-6 text-center">
                          <span className={`px-3 py-1 rounded-lg text-sm font-black ${
                            s.average_score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
@@ -353,7 +363,7 @@ export default function TeacherDashboard() {
           </div>
         )}
 
-        {/* === PROJECTS TAB (เหมือนเดิม) === */}
+        {/* === PROJECTS TAB === */}
         {activeTab === 'projects' && (
           <div className="space-y-8 animate-in slide-in-from-right-10 duration-500">
              <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
