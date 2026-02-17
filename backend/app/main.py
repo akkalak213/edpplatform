@@ -13,7 +13,7 @@ app = FastAPI(title="EDP AI Platform 2026", version="2.0.0")
 origins = [
     "http://localhost:5173",          # สำหรับทดสอบในเครื่อง (Vite)
     "http://localhost:3000",          # เผื่อใช้พอร์ตอื่นๆ
-    "https://frontend-production-2c59.up.railway.app" # ✅ โดเมนจริงของคุณบน Railway
+    "https://krualex-edpplatform.up.railway.app" # ✅ โดเมนจริงของคุณบน Railway
 ]
 
 app.add_middleware(
