@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, LayoutDashboard, Users, FolderOpen, 
-  Search, Trash2, Edit2, Save, 
+  Search, Trash2, Edit2, Save, Key, 
   TrendingUp, Activity, PieChart, GraduationCap, CheckCircle 
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -43,7 +43,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
-  colorClass: string; // เช่น 'blue', 'emerald', 'purple', 'orange'
+  colorClass: string;
 }
 
 export default function TeacherDashboard() {
@@ -86,6 +86,23 @@ export default function TeacherDashboard() {
     navigate('/login');
   };
 
+  // --- [FIXED] แก้ไข Type Error ตรงนี้ ---
+  const handleResetPassword = async (studentId: number, studentName: string) => {
+    if (!window.confirm(`⚠️ ยืนยันการรีเซ็ตรหัสผ่านของ "${studentName}" ?\n\nรหัสผ่านใหม่จะเป็น: password123`)) {
+      return;
+    }
+    
+    try {
+      await client.post(`/auth/reset-password/${studentId}`);
+      alert(`✅ รีเซ็ตรหัสผ่านของ "${studentName}" สำเร็จ!\nให้นักเรียนเข้าสู่ระบบด้วยรหัส: password123`);
+    } catch (err) {
+      // 1. ลบ : any ใน catch(err) ออก
+      // 2. Cast err เป็น object ที่เราต้องการใช้งานแทน
+      const error = err as { response?: { data?: { detail?: string } }; message?: string };
+      alert("❌ เกิดข้อผิดพลาด: " + (error.response?.data?.detail || error.message || "Unknown Error"));
+    }
+  };
+
   const getFilteredStudents = () => {
     return students.filter(s => 
       (s.first_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -97,7 +114,6 @@ export default function TeacherDashboard() {
   const classList = ['All', ...Array.from(new Set(students.map(s => s.class_room))).sort()];
 
   // --- Sub-Components ---
-  // ปรับปรุง StatCard ให้สว่างและชัดเจนขึ้น
   const StatCard = ({ title, value, icon: Icon, colorClass }: StatCardProps) => {
     const colorMap: Record<string, string> = {
       blue: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
@@ -168,7 +184,6 @@ export default function TeacherDashboard() {
         {/* === OVERVIEW TAB === */}
         {activeTab === 'overview' && stats && (
           <div className="space-y-10 animate-in fade-in duration-700">
-            {/* สถิติ 4 ใบ ชัดๆ เน้นๆ */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <StatCard title="นักเรียนทั้งหมด" value={stats.total_students} icon={Users} colorClass="blue" />
               <StatCard title="โครงงานทั้งหมด" value={stats.total_projects} icon={FolderOpen} colorClass="purple" />
@@ -177,7 +192,6 @@ export default function TeacherDashboard() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              {/* รายห้องเรียน */}
               <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
                 <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
                   <PieChart className="w-6 h-6 text-indigo-400"/> จำนวนนักเรียนแยกตามห้อง
@@ -200,7 +214,6 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* อัตราความสำเร็จ */}
               <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl flex flex-col items-center justify-center">
                 <h3 className="text-xl font-bold text-white mb-2 text-center w-full flex items-center justify-center gap-3">
                   <Activity className="w-6 h-6 text-emerald-400"/> Success Rate
@@ -270,6 +283,15 @@ export default function TeacherDashboard() {
                       <td className="p-6"><span className="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold">{s.class_room}</span></td>
                       <td className="p-6 text-center font-bold text-white">{s.project_count}</td>
                       <td className="p-6 flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        
+                        <button 
+                          onClick={() => handleResetPassword(s.id, s.first_name)} 
+                          title="รีเซ็ตรหัสผ่านเป็น password123"
+                          className="p-2.5 bg-orange-500/10 text-orange-400 rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-lg shadow-orange-500/10"
+                        >
+                          <Key className="w-4 h-4"/>
+                        </button>
+
                         <button onClick={() => { setEditingStudent(s); setEditForm({...s}); }} className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-500/10"><Edit2 className="w-4 h-4"/></button>
                         <button onClick={() => { if(confirm("ลบข้อมูล?")) client.delete(`/edp/teacher/students/${s.id}`).then(() => fetchData()); }} className="p-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-500/10"><Trash2 className="w-4 h-4"/></button>
                       </td>
@@ -328,7 +350,7 @@ export default function TeacherDashboard() {
 
       </main>
 
-      {/* Edit Modal (UI ปรับให้สวยขึ้น) */}
+      {/* Edit Modal */}
       {editingStudent && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="bg-[#1E293B] p-10 rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95">

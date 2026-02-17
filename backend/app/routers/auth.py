@@ -13,7 +13,8 @@ from app.core import security
 # ==========================================
 # 🔑 CONFIGURATION (กำหนดกุญแจที่นี่ที่เดียว จบปัญหา)
 # ==========================================
-SECRET_KEY = "sdmmgkamdjjjdJJNJsafnDLKsmfknSJDFndsjZNJKFD*-*324242dsa"  # กุญแจลับสำหรับไฟล์นี้โดยเฉพาะ
+# [FIX] ใส่ Key เดิมกลับมาให้แล้วครับ
+SECRET_KEY = "sdmmgkamdjjjdJJNJsafnDLKsmfknSJDFndsjZNJKFD*-*324242dsa"  
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # 1 วัน
 
@@ -33,7 +34,6 @@ class UserRegister(BaseModel):
 
 # --- 🛠️ INTERNAL FUNCTIONS (สร้างและตรวจ Token ในไฟล์นี้เลย) ---
 
-# [NEW] ฟังก์ชันสร้าง Token ที่ใช้ SECRET_KEY ของไฟล์นี้แน่นอน
 def create_access_token_local(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -42,11 +42,9 @@ def create_access_token_local(data: dict, expires_delta: Optional[timedelta] = N
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     
     to_encode.update({"exp": expire})
-    # ใช้ SECRET_KEY ที่ประกาศข้างบน 100%
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-# [FIX] ฟังก์ชันตรวจ Token ก็ใช้ SECRET_KEY ตัวเดียวกัน
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -54,7 +52,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # ใช้ SECRET_KEY ตัวเดิมในการแกะ Token
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
@@ -82,7 +79,6 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     # 3. Create User
     new_user = User(
         email=user_in.email,
-        # Password Hash ยังใช้ของ security ได้ (เพราะมันเป็น One-way hash ไม่เกี่ยวกับ Secret Key)
         hashed_password=security.get_password_hash(user_in.password),
         student_id=user_in.student_id,
         first_name=user_in.first_name,
@@ -106,10 +102,9 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="อีเมลหรือรหัสผ่านไม่ถูกต้อง")
     
-    # 3. สร้าง Token (เรียกฟังก์ชัน local ที่เราเพิ่งเขียน)
+    # 3. สร้าง Token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # [FIX] ใช้ create_access_token_local แทน security.create_access_token
     access_token = create_access_token_local(
         data={
             "sub": user.email, 
@@ -120,9 +115,26 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         expires_delta=access_token_expires
     )
     
-    # [CRITICAL FIX] ส่ง role กลับไปด้วย เพื่อให้ Frontend ตัดสินใจเปลี่ยนหน้าจอได้ถูกต้อง
     return {
         "access_token": access_token, 
         "token_type": "bearer",
         "role": user.role 
     }
+
+# --- [NEW] ระบบรีเซ็ตรหัสผ่านสำหรับครู ---
+@router.post("/reset-password/{student_id}")
+def reset_student_password(student_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # 1. เช็คว่าเป็นครูไหม (Security Check)
+    if current_user.role != "teacher":
+        raise HTTPException(status_code=403, detail="สำหรับครูเท่านั้น")
+    
+    # 2. หานักเรียน
+    student = db.query(User).filter(User.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="ไม่พบข้อมูลนักเรียน")
+        
+    # 3. รีเซ็ตรหัสผ่านเป็น "password123"
+    student.hashed_password = security.get_password_hash("password123")
+    db.commit()
+    
+    return {"message": f"รีเซ็ตรหัสผ่านของ {student.first_name} เป็น 'password123' เรียบร้อยแล้ว"}
