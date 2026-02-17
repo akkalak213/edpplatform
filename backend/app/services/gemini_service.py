@@ -12,7 +12,7 @@ load_dotenv()
 
 # [TUNING] ลดจำนวนคนเข้าพร้อมกันเหลือ 3 คน (ปลอดภัยที่สุดสำหรับ Free Tier)
 # ส่วนเกินจะรอในคิวของ Server เรา ไม่ส่งไปชน Google ให้โดนด่า
-gemini_semaphore = asyncio.Semaphore(3)
+gemini_semaphore = asyncio.Semaphore(50)
 
 class GeminiService:
     def __init__(self):
@@ -137,10 +137,10 @@ class GeminiService:
     # ---------------------------------------------------------
     @retry(
         # [TUNING] เปลี่ยนจากนับครั้ง เป็นนับเวลา: ให้พยายามตื้อต่อเนื่องนานสูงสุด 120 วินาที (2 นาที)
-        stop=stop_after_delay(120), 
+        stop=stop_after_delay(30), 
         # รอแบบทวีคูณ: เริ่มที่ 4 วิ, แล้วเพิ่มไปเรื่อยๆ สูงสุดรอรอบละ 60 วิ
         # (สูตรนี้จะช่วยให้เราไม่ Spam ถี่เกินไป จนโดนแบนซ้ำ)
-        wait=wait_exponential(multiplier=2, min=4, max=60),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
         retry=retry_if_exception_type(exceptions.ResourceExhausted) # ทำเฉพาะเมื่อเจอ Error 429
     )
     async def _generate_with_retry_and_limit(self, prompt: str):
