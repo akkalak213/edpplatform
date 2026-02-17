@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
-
+from app.schemas.edp import ChangePassword
 from app.database import get_db
 from app.models.edp import User
 from app.core import security
@@ -138,3 +138,19 @@ def reset_student_password(student_id: int, db: Session = Depends(get_db), curre
     db.commit()
     
     return {"message": f"รีเซ็ตรหัสผ่านของ {student.first_name} เป็น 'password123' เรียบร้อยแล้ว"}
+
+@router.post("/change-password")
+def change_password(
+    password_data: ChangePassword,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 1. ตรวจรหัสเดิม
+    if not security.verify_password(password_data.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="รหัสผ่านเดิมไม่ถูกต้อง")
+    
+    # 2. เปลี่ยนรหัสใหม่
+    current_user.hashed_password = security.get_password_hash(password_data.new_password)
+    db.commit()
+    
+    return {"message": "เปลี่ยนรหัสผ่านสำเร็จ"}

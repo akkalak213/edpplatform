@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from datetime import datetime, timezone
 from typing import List
-from sqlalchemy import func
 from app.database import get_db
 from app.models.edp import EdpStep, Project, User
 from app.schemas.edp import (
@@ -34,19 +33,27 @@ def get_dashboard_stats(
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied: Teachers only")
 
-    # 2. คำนวณสถิติ
+    # 2. คำนวณสถิติพื้นฐาน
     total_students = db.query(User).filter(User.role == 'student').count()
     total_projects = db.query(Project).count()
     
-    # [FIXED] นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
-    # ใช้ func.coalesce เพื่อเช็คคะแนนครูก่อน ถ้าไม่มีค่อยใช้คะแนน AI
+    # นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
     completed_projects = db.query(Project).join(EdpStep).filter(
         EdpStep.step_number == 6,
         func.coalesce(EdpStep.teacher_score, EdpStep.score) >= 60
     ).count()
 
-    # คะแนนเฉลี่ยรวมทุก Step ของทุกคน (แก้ให้คิดคะแนนครูด้วยเช่นกัน)
+    # คะแนนเฉลี่ยรวมทุก Step ของทุกคน
     avg_score = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score))).scalar() or 0.0
+
+    # [NEW] เวลาเฉลี่ยในแต่ละ Step (วินาที)
+    time_stats = db.query(
+        EdpStep.step_number, 
+        func.avg(EdpStep.time_spent_seconds)
+    ).group_by(EdpStep.step_number).all()
+    
+    # แปลงเป็น Dict { "Step 1": 120.5, ... }
+    avg_time_map = {f"Step {s[0]}": round(s[1] or 0, 2) for s in time_stats}
 
     # การกระจายตัวของนักเรียนในแต่ละห้อง
     students = db.query(User).filter(User.role == 'student').all()
@@ -60,7 +67,11 @@ def get_dashboard_stats(
         total_projects=total_projects,
         completed_projects=completed_projects,
         average_score=round(avg_score, 2),
-        class_distribution=class_dist
+        class_distribution=class_dist,
+        # [NEW] เพิ่มข้อมูลใหม่
+        total_active_users=total_students, 
+        avg_time_per_step=avg_time_map,
+        student_performance_avg=round(avg_score, 2)
     )
 
 @router.get("/teacher/students", response_model=List[UserInfo])
@@ -75,12 +86,18 @@ def get_all_students(
     
     results = []
     for s in students:
-        # นับจำนวนโปรเจคของแต่ละคน
+        # นับจำนวนโปรเจค
         p_count = db.query(Project).filter(Project.owner_id == s.id).count()
+        
+        # [NEW] คำนวณคะแนนเฉลี่ยรายบุคคล
+        s_avg = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score)))\
+            .join(Project, Project.id == EdpStep.project_id)\
+            .filter(Project.owner_id == s.id).scalar() or 0.0
         
         # แปลงข้อมูล
         s_info = UserInfo.from_orm(s)
         s_info.project_count = p_count
+        s_info.average_score = round(s_avg, 2) # ใส่ค่าคะแนนเฉลี่ย
         results.append(s_info)
         
     return results
@@ -99,7 +116,7 @@ def update_student(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
         
-    # อัปเดตข้อมูลทีละ field ถ้ามีการส่งมา
+    # อัปเดตข้อมูลทีละ field
     if update_data.first_name: student.first_name = update_data.first_name
     if update_data.last_name: student.last_name = update_data.last_name
     if update_data.student_id: student.student_id = update_data.student_id
@@ -127,7 +144,7 @@ def delete_student(
     return {"message": "Student deleted successfully"}
 
 # ==========================================
-# 🚀 PROJECT & EDP ENDPOINTS (ของเดิมที่ปรับปรุงแล้ว)
+# 🚀 PROJECT & EDP ENDPOINTS
 # ==========================================
 
 @router.get("/projects")
@@ -202,7 +219,6 @@ def delete_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # ลบได้ถ้าเป็นเจ้าของ หรือ เป็นครู
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
         
@@ -222,7 +238,6 @@ async def submit_edp_step(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    # เช็คสิทธิ์การส่งงาน
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -252,7 +267,10 @@ async def submit_edp_step(
         ai_feedback=analysis.get("feedback_th", "N/A"),
         score=float(analysis.get("relevance_score", 0)),
         
-        # ✅ บันทึกข้อมูลสำคัญครบถ้วน
+        # [FIXED] บันทึก Creativity และ Time Spent ไม่ให้เป็น 0
+        creativity_score=float(analysis.get("creativity_score", 0)),
+        time_spent_seconds=step.time_spent_seconds, 
+        
         score_breakdown=analysis.get("score_breakdown", []),
         warning_flags=analysis.get("warning_flags", []),
         sentiment=analysis.get("sentiment", "Neutral"),
@@ -303,6 +321,7 @@ def grade_step(
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
 
+    # บันทึกคะแนนและคอมเมนต์จากครู
     step.teacher_score = grade.teacher_score
     step.teacher_comment = grade.teacher_comment
     step.is_teacher_reviewed = True

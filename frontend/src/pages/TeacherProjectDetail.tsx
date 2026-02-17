@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { ArrowLeft, User, MessageSquare, Save, CheckCircle, Award, AlertTriangle, Loader2 } from 'lucide-react';
+// [NEW] นำเข้า useToast เพื่อใช้แจ้งเตือนสวยๆ
+import { useToast } from '../components/Toast';
 
 interface EdpStep {
   id: number;
@@ -15,7 +17,6 @@ interface EdpStep {
   created_at: string;
 }
 
-// [FIX 1] สร้าง Interface สำหรับ Project เพื่อเลี่ยงการใช้ any
 interface TeacherProject {
   id: number;
   title: string;
@@ -28,6 +29,8 @@ interface TeacherProject {
 export default function TeacherProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast(); // [NEW] เรียกใช้ Hook แจ้งเตือน
+
   const [steps, setSteps] = useState<EdpStep[]>([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [studentName, setStudentName] = useState('');
@@ -38,17 +41,14 @@ export default function TeacherProjectDetail() {
   const [gradeComment, setGradeComment] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // [FIX 3] ใช้ useCallback หุ้มฟังก์ชัน และใส่ dependency [id]
   const fetchProjectData = useCallback(async () => {
     try {
       // 1. ดึงข้อมูล Steps
       const resSteps = await client.get(`/edp/project/${id}`);
       setSteps(resSteps.data);
 
-      // 2. ดึงข้อมูล Project Info (เพื่อเอาชื่อเด็ก)
+      // 2. ดึงข้อมูล Project Info
       const resProj = await client.get('/edp/teacher/projects');
-      
-      // [FIX 1] ระบุ Type แทน any
       const currentProj = resProj.data.find((p: TeacherProject) => p.id === Number(id));
       
       if (currentProj) {
@@ -57,16 +57,18 @@ export default function TeacherProjectDetail() {
       }
     } catch (err) {
       console.error("Error fetching data:", err);
+      showToast("ไม่สามารถดึงข้อมูลโปรเจคได้", "error");
     }
-  }, [id]);
+  }, [id, showToast]);
 
   useEffect(() => {
     fetchProjectData();
-  }, [fetchProjectData]); // [FIX 3] ใส่ dependency ให้ครบ
+  }, [fetchProjectData]);
 
   const handleEditClick = (step: EdpStep) => {
     setEditingStepId(step.id);
-    setGradeScore(step.teacher_score || step.score); // ถ้าครูยังไม่ให้ ใช้คะแนน AI ไปก่อน
+    // ถ้าครูเคยให้คะแนนแล้วให้ดึงมาโชว์ ถ้ายังให้ใช้คะแนน AI เป็นค่าเริ่มต้น
+    setGradeScore(step.teacher_score ?? step.score); 
     setGradeComment(step.teacher_comment || "");
   };
 
@@ -78,8 +80,8 @@ export default function TeacherProjectDetail() {
         teacher_comment: gradeComment
       });
       
-      // อัปเดต State หน้าจอ
-      setSteps(steps.map(s => s.id === stepId ? { 
+      // [FIX] ใช้ prev เพื่อความแม่นยำในการอัปเดต state
+      setSteps(prev => prev.map(s => s.id === stepId ? { 
         ...s, 
         teacher_score: gradeScore, 
         teacher_comment: gradeComment,
@@ -87,10 +89,10 @@ export default function TeacherProjectDetail() {
       } : s));
       
       setEditingStepId(null);
+      showToast("บันทึกคะแนนเรียบร้อยแล้ว", "success"); // [NEW] แจ้งเตือนสีเขียว
     } catch (err) {
-      // [FIX 2] ใช้งานตัวแปร err (Log error)
       console.error("Save grade error:", err);
-      alert("บันทึกไม่สำเร็จ กรุณาลองใหม่");
+      showToast("บันทึกไม่สำเร็จ กรุณาลองใหม่", "error"); // [NEW] แจ้งเตือนสีแดง
     } finally {
       setSaving(false);
     }

@@ -7,6 +7,8 @@ class StepCreate(BaseModel):
     project_id: int
     step_number: int 
     content: str
+    # [NEW] รับค่าเวลาที่ใช้จาก Frontend (ถ้าไม่มีจะ default เป็น 0)
+    time_spent_seconds: int = 0
 
 class ScoreItem(BaseModel):
     criteria: str
@@ -22,6 +24,15 @@ class StepResponse(BaseModel):
     score: float
     score_breakdown: Optional[List[ScoreItem]] = []
     
+    # [NEW] ส่วนของครูผู้สอน (สำคัญมาก เพื่อให้คะแนนครูส่งกลับไป Frontend ได้)
+    teacher_score: Optional[float] = None
+    teacher_comment: Optional[str] = None
+    is_teacher_reviewed: bool = False
+    
+    # [NEW] สถิติเพิ่มเติม (ความคิดสร้างสรรค์ + เวลาที่ใช้)
+    creativity_score: float = 0.0
+    time_spent_seconds: int = 0
+
     # Analytics Fields
     critical_thinking: Optional[str] = None
     sentiment: Optional[str] = None
@@ -41,14 +52,14 @@ class StepResponse(BaseModel):
 # --- Project Schemas ---
 class ProjectCreate(BaseModel):
     title: str
-    description: str = None
+    description: Optional[str] = None
 
 class ProjectBase(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
     created_at: Optional[datetime] = None
-    status: Optional[str] = None # เพิ่ม status ให้รองรับ ProjectModel ใหม่
+    status: Optional[str] = None 
     
     class Config:
         from_attributes = True
@@ -62,6 +73,9 @@ class UserInfo(BaseModel):
     class_room: str
     email: Optional[str] = None
     project_count: Optional[int] = 0 
+    
+    # [NEW] เกรดเฉลี่ยรายบุคคล (สำหรับแสดงในตารางรายชื่อนักเรียน)
+    average_score: float = 0.0
     
     class Config:
         from_attributes = True
@@ -87,3 +101,13 @@ class DashboardStats(BaseModel):
     completed_projects: int
     average_score: float
     class_distribution: Dict[str, int]
+    
+    # [NEW] สถิติใหม่สำหรับ Dashboard
+    total_active_users: int = 0
+    avg_time_per_step: Dict[str, float] = {}
+    student_performance_avg: float = 0.0
+
+# [NEW] สำหรับเปลี่ยนรหัสผ่าน
+class ChangePassword(BaseModel):
+    old_password: str
+    new_password: str
