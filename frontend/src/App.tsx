@@ -9,7 +9,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import TeacherDashboard from './pages/TeacherDashboard';
 import TeacherProjectDetail from './pages/TeacherProjectDetail';
 
-// [NEW] Import ยามเฝ้าประตู
+// Import ยามเฝ้าประตู
 import ProtectedRoute from './components/ProtectedRoute';
 import StudentQuiz from './pages/StudentQuiz';
 
@@ -17,6 +17,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -36,6 +37,9 @@ function App() {
           <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
           <Route path="/teacher/project/:id" element={<TeacherProjectDetail />} />
         </Route>
+
+        {/* Fallback for 404 - Optional: Redirect to login or show 404 */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
 
       </Routes>
     </BrowserRouter>
