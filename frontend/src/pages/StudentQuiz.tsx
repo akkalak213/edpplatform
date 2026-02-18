@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   ArrowLeft, Clock, CheckCircle, 
-  ChevronRight, Trophy, RotateCw, Play, Lock, Unlock, Loader2, AlertTriangle, XCircle 
+  ChevronRight, Trophy, Play, Lock, Unlock, Loader2, AlertTriangle, XCircle, LogOut, 
+  RotateCw
 } from 'lucide-react';
 
 interface Question {
@@ -50,13 +51,17 @@ export default function StudentQuiz() {
   const [timeSeconds, setTimeSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
 
+  // [NEW] State สำหรับ Modal ยืนยันการออก
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
   // --- 🚫 ANTI-CHEAT STATE & REFS 🚫 ---
   const [cheatingDetected, setCheatingDetected] = useState(false);
   const isQuizActiveRef = useRef(false);
 
   useEffect(() => {
-    isQuizActiveRef.current = quizStarted && !quizFinished;
-  }, [quizStarted, quizFinished]);
+    // เพิ่มเงื่อนไข: ถ้า Modal ยืนยันออกเปิดอยู่ ถือว่ายังไม่โกง (เพราะผู้ใช้เป็นคนกดเอง)
+    isQuizActiveRef.current = quizStarted && !quizFinished && !showExitConfirm;
+  }, [quizStarted, quizFinished, showExitConfirm]);
 
   useEffect(() => {
     const handleViolation = () => {
@@ -92,20 +97,26 @@ export default function StudentQuiz() {
     setTimeSeconds(0);
     setIsLocked(false);
     setSubmitting(false);
+    setShowExitConfirm(false);
   };
   // -------------------------------------
 
-  // [NEW] 🔙 Handle Back Button Logic
-  const handleBack = () => {
+  // Handle Back Button Logic
+  const handleBackCheck = () => {
     if (quizStarted && !quizFinished && !cheatingDetected) {
-      // ถ้ากำลังสอบอยู่ ให้เตือนก่อน
-      if (window.confirm("⚠️ คำเตือน: คุณกำลังทำข้อสอบอยู่\n\nหากออกจากหน้านี้ การสอบจะถือเป็นโมฆะและคะแนนจะไม่ถูกบันทึก\n\nยืนยันที่จะออกจากหน้าสอบหรือไม่?")) {
-        navigate('/dashboard');
-      }
+      // เปิด Custom Modal แทนการใช้ window.confirm
+      setShowExitConfirm(true);
     } else {
-      // ถ้ายังไม่เริ่ม หรือสอบเสร็จแล้ว หรือโดนจับโกง ให้ไปได้เลย
       navigate('/dashboard');
     }
+  };
+
+  const confirmExit = () => {
+    navigate('/dashboard');
+  };
+
+  const cancelExit = () => {
+    setShowExitConfirm(false);
   };
 
   useEffect(() => {
@@ -113,7 +124,7 @@ export default function StudentQuiz() {
   }, []);
 
   useEffect(() => {
-    if (quizStarted && !quizFinished && !cheatingDetected) {
+    if (quizStarted && !quizFinished && !cheatingDetected && !showExitConfirm) {
       timerRef.current = window.setInterval(() => {
         setTimeSeconds(prev => prev + 1);
       }, 1000);
@@ -121,7 +132,7 @@ export default function StudentQuiz() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [quizStarted, quizFinished, cheatingDetected]);
+  }, [quizStarted, quizFinished, cheatingDetected, showExitConfirm]);
 
   const fetchQuestions = async () => {
     try {
@@ -142,6 +153,7 @@ export default function StudentQuiz() {
     setSubmitting(false);
     setQuizStarted(true);
     setCheatingDetected(false);
+    setShowExitConfirm(false);
   };
 
   const handleSelectChoice = (choiceIdx: number) => {
@@ -200,7 +212,6 @@ export default function StudentQuiz() {
   // --- 🔴 CHEATING DETECTED SCREEN 🔴 ---
   if (cheatingDetected) {
     return (
-      // [FIXED] z-[100] -> z-100
       <div className="fixed inset-0 z-100 bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
         <div className="bg-[#1E293B] border-2 border-red-500 rounded-3xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.5)]">
           <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
@@ -230,7 +241,6 @@ export default function StudentQuiz() {
     return (
       <div className="min-h-screen bg-[#020617] text-slate-300 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-[#1E293B] border border-slate-700 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
-          {/* [FIXED] bg-gradient-to-r -> bg-linear-to-r */}
           <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-cyan-500 to-blue-600"></div>
           
           <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-400">
@@ -315,12 +325,12 @@ export default function StudentQuiz() {
   const isLastQuestion = currentQIndex === questions.length - 1;
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-300 font-kanit flex flex-col">
+    <div className="min-h-screen bg-[#020617] text-slate-300 font-kanit flex flex-col relative">
       {/* Header */}
       <header className="px-6 py-4 border-b border-slate-800 bg-[#0F172A] flex justify-between items-center sticky top-0 z-20">
         <div className="flex items-center gap-4">
-          {/* [FIXED] ใช้ handleBack แทน navigate ตรงๆ */}
-          <button onClick={handleBack}><ArrowLeft className="w-5 h-5" /></button>
+          {/* ใช้ handleBackCheck แทน navigate */}
+          <button onClick={handleBackCheck} className="p-2 hover:bg-slate-800 rounded-full transition"><ArrowLeft className="w-5 h-5" /></button>
           <div>
             <h2 className="text-white font-bold">ข้อที่ {currentQIndex + 1} <span className="text-slate-500 text-sm">/ {questions.length}</span></h2>
           </div>
@@ -338,7 +348,6 @@ export default function StudentQuiz() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 max-w-3xl mx-auto w-full flex flex-col justify-center">
-        {/* Loading Overlay when submitting */}
         {submitting && (
            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-in fade-in">
               <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mb-4" />
@@ -407,7 +416,6 @@ export default function StudentQuiz() {
               <button 
                 onClick={handleNext}
                 disabled={submitting}
-                // [FIXED] bg-gradient-to-r -> bg-linear-to-r
                 className={`flex-2 py-4 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2
                   ${isLastQuestion 
                     ? 'bg-green-600 hover:bg-green-500 shadow-green-500/20' 
@@ -424,6 +432,36 @@ export default function StudentQuiz() {
           )}
         </div>
       </footer>
+
+      {/* --- [NEW] EXIT CONFIRMATION MODAL --- */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-100 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <LogOut className="w-8 h-8 text-amber-500" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">ยืนยันการออกจากหน้าสอบ</h3>
+            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+              ⚠️ หากคุณออกตอนนี้ <span className="text-red-400 font-bold">คะแนนจะไม่ถูกบันทึก</span> และการสอบรอบนี้ถือเป็นโมฆะ
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={cancelExit}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium border border-slate-600 transition-all"
+              >
+                ทำข้อสอบต่อ
+              </button>
+              <button 
+                onClick={confirmExit}
+                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 transition-all"
+              >
+                ยืนยันออก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
