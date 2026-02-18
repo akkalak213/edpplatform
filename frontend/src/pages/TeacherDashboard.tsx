@@ -5,9 +5,10 @@ import {
   LogOut, LayoutDashboard, Users, FolderOpen, 
   Search, Trash2, Edit2, Save, Key, 
   TrendingUp, Activity, PieChart, GraduationCap, CheckCircle,
-  Clock, Signal 
+  Clock, Signal, Trophy, AlertCircle, X 
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import TeacherQuizAnalytics from './TeacherQuizAnalytics';
 
 // Interfaces
 interface Stats {
@@ -52,9 +53,26 @@ interface StatCardProps {
   subValue?: string;
 }
 
+// Modal State Interfaces
+interface ConfirmModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText: string;
+  confirmColor: 'red' | 'indigo' | 'orange';
+  onConfirm: () => void;
+}
+
+interface AlertModalState {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  type: 'success' | 'error';
+}
+
 export default function TeacherDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'projects'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'students' | 'projects' | 'analytics'>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -65,6 +83,15 @@ export default function TeacherDashboard() {
 
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', student_id: '', class_room: '' });
+
+  // Custom Modal States
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+    isOpen: false, title: '', message: '', confirmText: 'ยืนยัน', confirmColor: 'indigo', onConfirm: () => {}
+  });
+  
+  const [alertModal, setAlertModal] = useState<AlertModalState>({
+    isOpen: false, title: '', message: '', type: 'success'
+  });
 
   const fetchData = useCallback(async () => {
     try {
@@ -78,13 +105,12 @@ export default function TeacherDashboard() {
       setProjects(resProjects.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
-      navigate('/dashboard');
+      navigate('/dashboard'); 
     } finally {
       setLoading(false);
     }
   }, [navigate]);
 
-  // Auto Refresh ทุก 5 วินาที
   useEffect(() => {
     fetchData(); 
     const interval = setInterval(fetchData, 5000); 
@@ -96,19 +122,62 @@ export default function TeacherDashboard() {
     navigate('/login');
   };
 
-  const handleResetPassword = async (studentId: number, studentName: string) => {
-    if (!window.confirm(`⚠️ ยืนยันการรีเซ็ตรหัสผ่านของ "${studentName}" ?\n\nรหัสผ่านใหม่จะเป็น: password123`)) {
-      return;
-    }
-    
-    try {
-      await client.post(`/auth/reset-password/${studentId}`);
-      alert(`✅ รีเซ็ตรหัสผ่านของ "${studentName}" สำเร็จ!\nให้นักเรียนเข้าสู่ระบบด้วยรหัส: password123`);
-    } catch (err) {
-      // [FIXED] ลบ any และใช้ Type Casting แทนเพื่อผ่าน ESLint
-      const error = err as { response?: { data?: { detail?: string } }; message?: string };
-      alert("❌ เกิดข้อผิดพลาด: " + (error.response?.data?.detail || error.message || "Unknown Error"));
-    }
+  const handleResetPassword = (studentId: number, studentName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'ยืนยันการรีเซ็ตรหัสผ่าน',
+      message: `คุณต้องการรีเซ็ตรหัสผ่านของนักเรียน "${studentName}" ใช่หรือไม่?\nรหัสผ่านใหม่จะเป็น: password123`,
+      confirmText: 'รีเซ็ตรหัสผ่าน',
+      confirmColor: 'orange',
+      onConfirm: async () => {
+        try {
+          await client.post(`/auth/reset-password/${studentId}`);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          setAlertModal({
+            isOpen: true,
+            title: 'ดำเนินการสำเร็จ',
+            message: `รีเซ็ตรหัสผ่านเรียบร้อยแล้ว\nให้นักเรียนเข้าสู่ระบบด้วยรหัส: password123`,
+            type: 'success'
+          });
+        } catch (err) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          const error = err as { response?: { data?: { detail?: string } }; message?: string };
+          setAlertModal({
+            isOpen: true,
+            title: 'เกิดข้อผิดพลาด',
+            message: error.response?.data?.detail || "ไม่สามารถรีเซ็ตรหัสผ่านได้",
+            type: 'error'
+          });
+        }
+      }
+    });
+  };
+
+  const handleDeleteStudent = (student: Student) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'ยืนยันการลบข้อมูล',
+      message: `คุณแน่ใจหรือไม่ที่จะลบข้อมูลของ "${student.first_name} ${student.last_name}"?\nการกระทำนี้ไม่สามารถกู้คืนได้`,
+      confirmText: 'ลบข้อมูลทันที',
+      confirmColor: 'red',
+      onConfirm: async () => {
+        try {
+          await client.delete(`/edp/teacher/students/${student.id}`);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          fetchData(); // Refresh Data
+        } catch (err) {
+          // [FIXED] ใช้ console.error เพื่อให้ err ถูกใช้งาน
+          console.error("Delete failed:", err);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          setAlertModal({
+            isOpen: true,
+            title: 'เกิดข้อผิดพลาด',
+            message: 'ไม่สามารถลบข้อมูลได้',
+            type: 'error'
+          });
+        }
+      }
+    });
   };
 
   const getFilteredStudents = () => {
@@ -162,7 +231,7 @@ export default function TeacherDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0F172A] text-slate-300 font-kanit flex">
+    <div className="min-h-screen bg-[#0F172A] text-slate-300 font-kanit flex relative">
       
       {/* Sidebar */}
       <aside className="w-72 bg-[#1E293B] border-r border-slate-800 flex flex-col fixed h-full z-30 shadow-2xl">
@@ -188,6 +257,9 @@ export default function TeacherDashboard() {
           <button onClick={() => setActiveTab('projects')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all ${activeTab === 'projects' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'}`}>
             <FolderOpen className="w-5 h-5" /> ติดตามโครงงาน
           </button>
+          <button onClick={() => setActiveTab('analytics')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl font-medium transition-all ${activeTab === 'analytics' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' : 'hover:bg-slate-800 text-slate-400'}`}>
+            <Trophy className="w-5 h-5" /> ผลการทดสอบ
+          </button>
         </nav>
 
         <div className="p-6 border-t border-slate-800">
@@ -203,34 +275,17 @@ export default function TeacherDashboard() {
         {/* === OVERVIEW TAB === */}
         {activeTab === 'overview' && stats && (
           <div className="space-y-10 animate-in fade-in duration-700">
-            
-            {/* Row 1: สถิติหลัก (5 ใบ) */}
+            {/* Row 1: สถิติหลัก */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-              {/* 1. Active Users (Realtime) */}
-              <StatCard 
-                title="Active Users" 
-                value={stats.total_active_users} 
-                icon={Signal} 
-                colorClass="cyan"
-                subValue="Online"
-              />
-              
-              {/* 2. Total Students */}
+              <StatCard title="Active Users" value={stats.total_active_users} icon={Signal} colorClass="cyan" subValue="Online" />
               <StatCard title="นักเรียนทั้งหมด" value={stats.total_students} icon={Users} colorClass="blue" />
-              
-              {/* 3. Total Projects */}
               <StatCard title="โครงงานทั้งหมด" value={stats.total_projects} icon={FolderOpen} colorClass="purple" />
-              
-              {/* 4. Completed Projects */}
               <StatCard title="ผ่านเกณฑ์แล้ว" value={stats.completed_projects} icon={CheckCircle} colorClass="emerald" />
-              
-              {/* 5. Average Score */}
               <StatCard title="คะแนนเฉลี่ย" value={stats.average_score} icon={TrendingUp} colorClass="orange" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-              
-              {/* Class Distribution (แบบเดิม Progress Bar) */}
+              {/* Class Distribution */}
               <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
                 <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
                   <PieChart className="w-6 h-6 text-indigo-400"/> จำนวนนักเรียนแยกตามห้อง
@@ -254,7 +309,7 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* Time per Step Graph (Realtime Data) */}
+              {/* Time per Step Graph */}
               <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 shadow-xl">
                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
                   <Clock className="w-6 h-6 text-pink-400"/> เวลาเฉลี่ยต่อขั้นตอน (นาที)
@@ -278,11 +333,10 @@ export default function TeacherDashboard() {
                     );
                   })}
                   {Object.keys(stats.avg_time_per_step || {}).length === 0 && (
-                     <div className="text-center text-slate-500 py-10">ยังไม่มีข้อมูลเวลาการใช้งาน</div>
+                      <div className="text-center text-slate-500 py-10">ยังไม่มีข้อมูลเวลาการใช้งาน</div>
                   )}
                 </div>
               </div>
-
             </div>
           </div>
         )}
@@ -334,13 +388,13 @@ export default function TeacherDashboard() {
                       <td className="p-6 text-center font-bold text-slate-400">{s.project_count}</td>
                       
                       <td className="p-6 text-center">
-                         <span className={`px-3 py-1 rounded-lg text-sm font-black ${
-                           s.average_score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                           s.average_score >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
-                           'bg-red-500/20 text-red-400'
-                         }`}>
-                           {s.average_score}
-                         </span>
+                          <span className={`px-3 py-1 rounded-lg text-sm font-black ${
+                            s.average_score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                            s.average_score >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-red-500/20 text-red-400'
+                          }`}>
+                            {s.average_score}
+                          </span>
                       </td>
 
                       <td className="p-6 flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -353,7 +407,7 @@ export default function TeacherDashboard() {
                         </button>
 
                         <button onClick={() => { setEditingStudent(s); setEditForm({...s}); }} className="p-2.5 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-500/10"><Edit2 className="w-4 h-4"/></button>
-                        <button onClick={() => { if(confirm("ลบข้อมูล?")) client.delete(`/edp/teacher/students/${s.id}`).then(() => fetchData()); }} className="p-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-500/10"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => handleDeleteStudent(s)} className="p-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-500/10"><Trash2 className="w-4 h-4"/></button>
                       </td>
                     </tr>
                   ))}
@@ -408,9 +462,14 @@ export default function TeacherDashboard() {
           </div>
         )}
 
+        {/* === ANALYTICS TAB === */}
+        {activeTab === 'analytics' && (
+          <TeacherQuizAnalytics />
+        )}
+
       </main>
 
-      {/* Edit Modal */}
+      {/* Edit Modal (Student Info) */}
       {editingStudent && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="bg-[#1E293B] p-10 rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95">
@@ -429,6 +488,46 @@ export default function TeacherDashboard() {
                 <Save className="w-5 h-5" /> บันทึก
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 bg-${confirmModal.confirmColor}-500/10 border border-${confirmModal.confirmColor}-500/20`}>
+              <AlertCircle className={`w-8 h-8 text-${confirmModal.confirmColor}-500`} />
+            </div>
+            <h3 className="text-xl font-bold text-white text-center mb-2">{confirmModal.title}</h3>
+            <p className="text-slate-400 text-center text-sm mb-8 leading-relaxed whitespace-pre-line">{confirmModal.message}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmModal(prev => ({...prev, isOpen: false}))} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-all">ยกเลิก</button>
+              <button 
+                onClick={confirmModal.onConfirm}
+                className={`flex-1 py-3 text-white rounded-xl font-bold shadow-lg transition-all 
+                  ${confirmModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20' : 
+                    confirmModal.confirmColor === 'orange' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-500/20' : 
+                    'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'}`}
+              >
+                {confirmModal.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Modal */}
+      {alertModal.isOpen && (
+        <div className="fixed inset-0 z-70 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
+            <button onClick={() => setAlertModal(prev => ({...prev, isOpen: false}))} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X className="w-5 h-5"/></button>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${alertModal.type === 'success' ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'} border`}>
+              {alertModal.type === 'success' ? <CheckCircle className="w-8 h-8 text-green-500"/> : <AlertCircle className="w-8 h-8 text-red-500"/>}
+            </div>
+            <h3 className="text-xl font-bold text-white text-center mb-2">{alertModal.title}</h3>
+            <p className="text-slate-400 text-center text-sm mb-8 leading-relaxed whitespace-pre-line">{alertModal.message}</p>
+            <button onClick={() => setAlertModal(prev => ({...prev, isOpen: false}))} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all">รับทราบ</button>
           </div>
         </div>
       )}
