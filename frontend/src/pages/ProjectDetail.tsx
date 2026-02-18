@@ -197,7 +197,7 @@ const ContentGuideModal = ({ step, onClose }: { step: number, onClose: () => voi
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-[#1E293B] w-full max-w-2xl rounded-3xl border border-slate-700 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-900 to-slate-900 px-6 py-4 md:px-8 md:py-6 border-b border-slate-700 flex justify-between items-start shrink-0">
+        <div className="bg-linear-to-r from-blue-900 to-slate-900 px-6 py-4 md:px-8 md:py-6 border-b border-slate-700 flex justify-between items-start shrink-0">
           <div>
             <div className="text-[10px] md:text-xs font-bold text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-2">
               <BookOpen className="w-4 h-4" /> คู่มือการเรียนรู้
@@ -241,7 +241,7 @@ const ContentGuideModal = ({ step, onClose }: { step: number, onClose: () => voi
             <h3 className="text-base md:text-lg font-bold text-cyan-400 mb-2 md:mb-3 flex items-center gap-2">
               <Sparkles className="w-5 h-5" /> สิ่งที่ต้องทำส่งครู
             </h3>
-            <div className="text-white bg-gradient-to-r from-cyan-900/40 to-blue-900/40 border border-cyan-500/30 p-5 rounded-xl text-sm md:text-base">
+            <div className="text-white bg-linear-to-r from-cyan-900/40 to-blue-900/40 border border-cyan-500/30 p-5 rounded-xl text-sm md:text-base">
               {content.task}
             </div>
           </div>
@@ -621,7 +621,7 @@ export default function ProjectDetail() {
                 value={currentInput}
                 onChange={(e) => setCurrentInput(e.target.value)}
                 placeholder={isProcessComplete ? "เริ่มรอบใหม่..." : "พิมพ์เนื้อหา..."}
-                className="flex-1 bg-transparent text-white px-3 py-2 md:px-4 md:py-3 outline-none resize-none placeholder-slate-600 min-h-[50px] md:min-h-[60px] text-sm md:text-base"
+                className="flex-1 bg-transparent text-white px-3 py-2 md:px-4 md:py-3 outline-none resize-none placeholder-slate-600 min-h-12.5 md:min-h-15 text-sm md:text-base"
                 rows={1}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {

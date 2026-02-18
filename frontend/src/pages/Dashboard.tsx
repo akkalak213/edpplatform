@@ -198,7 +198,7 @@ export default function Dashboard() {
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h80v80h-80z' fill='none' stroke='%2338bdf8' stroke-width='0.5'/%3E%3Cpath d='M30 30h40v40h-40z' fill='none' stroke='%2338bdf8' stroke-width='0.5' opacity='0.5'/%3E%3C/svg%3E")`, backgroundSize: '60px 60px' }}></div>
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-soft-light"></div>
-        <div className="absolute top-[-20%] left-[-10%] w-[150%] md:w-[200px] h-[150%] md:h-[200px] bg-cyan-600/10 blur-[100px] md:blur-[150px] rounded-full mix-blend-screen animate-pulse-slow"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[150%] md:w-50 h-[150%] md:h-50 bg-cyan-600/10 blur-[100px] md:blur-[150px] rounded-full mix-blend-screen animate-pulse-slow"></div>
       </div>
 
       <style>{`
@@ -390,10 +390,10 @@ export default function Dashboard() {
 
       {/* --- Create Project Modal --- */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 overflow-y-auto">
           <div className="fixed inset-0 bg-[#020617]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setShowCreateModal(false)}></div>
           
-          <div className="relative glass-tech bg-[#0F172A]/90 rounded-[2rem] w-full max-w-lg p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden my-auto">
+          <div className="relative glass-tech bg-[#0F172A]/90 rounded-4xl w-full max-w-lg p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden my-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-600"></div>
             
             <div className="flex justify-between items-start mb-6 md:mb-8 relative z-10">
@@ -449,7 +449,7 @@ export default function Dashboard() {
 
       {/* --- Delete Confirmation Modal --- */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-110 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowDeleteModal(false)}></div>
           <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-sm p-6 md:p-8 text-center animate-modal-pop border-red-500/20">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-red-500"></div>
@@ -471,9 +471,9 @@ export default function Dashboard() {
 
       {/* --- Change Password Modal --- */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 overflow-y-auto">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowPasswordModal(false)}></div>
-          <div className="relative glass-tech bg-[#0F172A] rounded-[2rem] w-full max-w-md p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 my-auto">
+          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-md p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 my-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-500"></div>
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -506,7 +506,7 @@ export default function Dashboard() {
 
       {/* --- Quiz History Modal --- */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistoryModal(false)}></div>
           <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-2xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
@@ -556,7 +556,7 @@ export default function Dashboard() {
 
       {/* --- Leaderboard Modal --- */}
       {showLeaderboard && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 md:p-4">
+        <div className="fixed inset-0 z-120 flex items-center justify-center p-2 md:p-4">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowLeaderboard(false)}></div>
           <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-3xl p-5 md:p-8 shadow-2xl animate-modal-pop border-amber-500/20 flex flex-col max-h-[90vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-amber-400 to-orange-600"></div>
@@ -601,7 +601,7 @@ export default function Dashboard() {
                           </td>
                           <td className="py-4 font-medium text-slate-200">
                             <div className="flex items-center gap-2">
-                              <span className="truncate max-w-[80px] md:max-w-none">{item.student_name}</span>
+                              <span className="truncate max-w-20 md:max-w-none">{item.student_name}</span>
                               {index === 0 && <span className="hidden xs:inline text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">KING</span>}
                             </div>
                           </td>

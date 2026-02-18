@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import client from '../api/client';
 import { 
   Users, CheckCircle, TrendingUp, AlertTriangle, Search, Trash2, 
-  Loader2, Trophy, XCircle, AlertCircle, RefreshCw
+  Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -35,6 +35,17 @@ interface StudentStat {
   latest_attempt_at: string;
 }
 
+// --- Modal Step Type ---
+type ResetStep = 'confirm' | 'type' | 'result';
+
+interface ResetModalState {
+  isOpen: boolean;
+  step: ResetStep;
+  typeValue: string;
+  resultType: 'success' | 'error';
+  resultMessage: string;
+}
+
 export default function TeacherQuizAnalytics() {
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<OverviewStats | null>(null);
@@ -42,6 +53,15 @@ export default function TeacherQuizAnalytics() {
   const [students, setStudents] = useState<StudentStat[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [resetting, setResetting] = useState(false);
+
+  // --- Reset Modal State ---
+  const [resetModal, setResetModal] = useState<ResetModalState>({
+    isOpen: false,
+    step: 'confirm',
+    typeValue: '',
+    resultType: 'success',
+    resultMessage: '',
+  });
 
   useEffect(() => {
     fetchData();
@@ -55,7 +75,6 @@ export default function TeacherQuizAnalytics() {
         client.get('/quiz/analytics/items'),
         client.get('/quiz/analytics/students')
       ]);
-      
       setOverview(resOverview.data);
       setItems(resItems.data);
       setStudents(resStudents.data);
@@ -66,20 +85,41 @@ export default function TeacherQuizAnalytics() {
     }
   };
 
-  const handleResetData = async () => {
-    if (!window.confirm("⚠️ คำเตือน: การกระทำนี้จะลบประวัติการสอบของนักเรียน 'ทุกคน' ออกจากระบบ\n\nคุณแน่ใจหรือไม่ที่จะดำเนินการต่อ?")) return;
-    
-    const confirmText = prompt("พิมพ์คำว่า 'RESET' เพื่อยืนยันการลบข้อมูล");
-    if (confirmText !== "RESET") return;
+  // --- Modal Handlers ---
+  const openResetModal = () => {
+    setResetModal({ isOpen: true, step: 'confirm', typeValue: '', resultType: 'success', resultMessage: '' });
+  };
+
+  const closeResetModal = () => {
+    setResetModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const handleResetConfirm = () => {
+    // ไปขั้นตอนพิมพ์ RESET
+    setResetModal(prev => ({ ...prev, step: 'type', typeValue: '' }));
+  };
+
+  const handleResetExecute = async () => {
+    if (resetModal.typeValue !== 'RESET') return;
 
     setResetting(true);
     try {
       await client.delete('/quiz/reset');
-      alert("ล้างข้อมูลเรียบร้อยแล้ว");
-      fetchData(); 
+      setResetModal(prev => ({
+        ...prev,
+        step: 'result',
+        resultType: 'success',
+        resultMessage: 'ล้างข้อมูลการสอบทั้งหมดเรียบร้อยแล้ว',
+      }));
+      fetchData();
     } catch (err) {
       console.error("Reset failed:", err);
-      alert("เกิดข้อผิดพลาดในการลบข้อมูล");
+      setResetModal(prev => ({
+        ...prev,
+        step: 'result',
+        resultType: 'error',
+        resultMessage: 'เกิดข้อผิดพลาดในการลบข้อมูล กรุณาลองใหม่อีกครั้ง',
+      }));
     } finally {
       setResetting(false);
     }
@@ -213,7 +253,7 @@ export default function TeacherQuizAnalytics() {
           </div>
           
           <button 
-            onClick={handleResetData}
+            onClick={openResetModal}
             disabled={resetting}
             className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-900/20 transition-all flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
           >
@@ -326,6 +366,124 @@ export default function TeacherQuizAnalytics() {
           {filteredStudents.length === 0 && <div className="p-10 text-center text-slate-600">ไม่พบข้อมูล</div>}
         </div>
       </div>
+
+      {/* ===== RESET MODAL ===== */}
+      {resetModal.isOpen && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+          <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
+
+            {/* ปุ่มปิด (ทุก step) */}
+            <button
+              onClick={closeResetModal}
+              className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* ── STEP 1: ยืนยันเบื้องต้น ── */}
+            {resetModal.step === 'confirm' && (
+              <>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 bg-red-500/10 border border-red-500/20">
+                  <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8 text-red-500" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white text-center mb-2">ยืนยันการรีเซ็ตระบบสอบ</h3>
+                <p className="text-slate-400 text-center text-xs sm:text-sm mb-2 leading-relaxed">
+                  การกระทำนี้จะลบประวัติการสอบของนักเรียน
+                </p>
+                <p className="text-red-400 font-bold text-center text-xs sm:text-sm mb-6 sm:mb-8 leading-relaxed">
+                  "ทุกคน" ออกจากระบบถาวร รวมถึง Leaderboard
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeResetModal}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-all text-sm"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleResetConfirm}
+                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold shadow-lg shadow-red-500/20 transition-all text-sm"
+                  >
+                    ดำเนินการต่อ
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── STEP 2: พิมพ์ RESET ยืนยัน ── */}
+            {resetModal.step === 'type' && (
+              <>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 bg-orange-500/10 border border-orange-500/20">
+                  <AlertTriangle className="w-7 h-7 sm:w-8 sm:h-8 text-orange-500" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white text-center mb-2">ยืนยันตัวตน</h3>
+                <p className="text-slate-400 text-center text-xs sm:text-sm mb-1 leading-relaxed">
+                  พิมพ์คำว่า
+                </p>
+                <p className="text-center mb-5">
+                  <span className="font-black text-orange-400 bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-lg text-sm tracking-widest">
+                    RESET
+                  </span>
+                </p>
+                <input
+                  type="text"
+                  placeholder="พิมพ์ RESET ที่นี่..."
+                  value={resetModal.typeValue}
+                  onChange={(e) => setResetModal(prev => ({ ...prev, typeValue: e.target.value }))}
+                  className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl px-5 py-3.5 text-white outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm font-mono tracking-widest text-center mb-6"
+                  autoFocus
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={closeResetModal}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-all text-sm"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    onClick={handleResetExecute}
+                    disabled={resetModal.typeValue !== 'RESET' || resetting}
+                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-red-500/20 transition-all text-sm flex items-center justify-center gap-2"
+                  >
+                    {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    ลบข้อมูล
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── STEP 3: ผลลัพธ์ ── */}
+            {resetModal.step === 'result' && (
+              <>
+                <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 border ${
+                  resetModal.resultType === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/20'
+                    : 'bg-red-500/10 border-red-500/20'
+                }`}>
+                  {resetModal.resultType === 'success'
+                    ? <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500" />
+                    : <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8 text-red-500" />
+                  }
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold text-white text-center mb-2">
+                  {resetModal.resultType === 'success' ? 'ดำเนินการสำเร็จ' : 'เกิดข้อผิดพลาด'}
+                </h3>
+                <p className="text-slate-400 text-center text-xs sm:text-sm mb-6 sm:mb-8 leading-relaxed">
+                  {resetModal.resultMessage}
+                </p>
+                <button
+                  onClick={closeResetModal}
+                  className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all text-sm"
+                >
+                  รับทราบ
+                </button>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -218,7 +218,7 @@ export default function TeacherDashboard() {
             {subValue && <span className="text-xs text-slate-500 mb-1.5 font-medium">{subValue}</span>}
           </div>
         </div>
-        <div className={`p-3 sm:p-4 rounded-2xl border flex-shrink-0 ${colorMap[colorClass]} group-hover:scale-110 transition-transform`}>
+        <div className={`p-3 sm:p-4 rounded-2xl border shrink-0 ${colorMap[colorClass]} group-hover:scale-110 transition-transform`}>
           <Icon className="w-7 h-7 sm:w-9 sm:h-9" />
         </div>
       </div>
@@ -290,7 +290,7 @@ export default function TeacherDashboard() {
                   : 'hover:bg-slate-800 text-slate-400'
               }`}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" /> {label}
+              <Icon className="w-5 h-5 shrink-0" /> {label}
             </button>
           ))}
         </nav>
@@ -341,7 +341,7 @@ export default function TeacherDashboard() {
                 {/* Class Distribution */}
                 <div className="bg-[#1E293B] p-6 lg:p-8 rounded-3xl border border-slate-800 shadow-xl">
                   <h3 className="text-lg lg:text-xl font-bold text-white mb-6 lg:mb-8 flex items-center gap-3">
-                    <PieChart className="w-6 h-6 text-indigo-400 flex-shrink-0"/> จำนวนนักเรียนแยกตามห้อง
+                    <PieChart className="w-6 h-6 text-indigo-400 shrink-0"/> จำนวนนักเรียนแยกตามห้อง
                   </h3>
                   <div className="space-y-5 lg:space-y-6">
                     {Object.entries(stats.class_distribution).sort().map(([cls, count]) => (
@@ -365,7 +365,7 @@ export default function TeacherDashboard() {
                 {/* Time per Step Graph */}
                 <div className="bg-[#1E293B] p-6 lg:p-8 rounded-3xl border border-slate-800 shadow-xl">
                   <h3 className="text-lg lg:text-xl font-bold text-white mb-5 lg:mb-6 flex items-center gap-3">
-                    <Clock className="w-6 h-6 text-pink-400 flex-shrink-0"/> เวลาเฉลี่ยต่อขั้นตอน (นาที)
+                    <Clock className="w-6 h-6 text-pink-400 shrink-0"/> เวลาเฉลี่ยต่อขั้นตอน (นาที)
                   </h3>
                   <div className="space-y-4 lg:space-y-5">
                     {Object.entries(stats.avg_time_per_step || {}).sort().map(([stepName, seconds]) => {
@@ -374,7 +374,7 @@ export default function TeacherDashboard() {
                         <div key={stepName} className="group">
                           <div className="flex justify-between text-sm mb-2">
                             <span className="text-slate-200 font-bold truncate mr-2">{stepName}</span>
-                            <span className="text-pink-400 font-mono flex-shrink-0">{formatTime(seconds)}</span>
+                            <span className="text-pink-400 font-mono shrink-0">{formatTime(seconds)}</span>
                           </div>
                           <div className="w-full bg-slate-800 rounded-full h-4 overflow-hidden border border-slate-700 relative">
                             <div 
@@ -424,7 +424,7 @@ export default function TeacherDashboard() {
               {/* [RESPONSIVE] Table ใช้ overflow-x-auto เพื่อ scroll แนวนอนบนมือถือ */}
               <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[700px]">
+                  <table className="w-full text-left min-w-175">
                     <thead className="bg-slate-800/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                       <tr>
                         <th className="p-4 lg:p-6">รหัสนักเรียน</th>
@@ -482,7 +482,7 @@ export default function TeacherDashboard() {
               {/* [RESPONSIVE] Table ใช้ overflow-x-auto */}
               <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[600px]">
+                  <table className="w-full text-left min-w-150">
                     <thead className="bg-slate-800/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                       <tr>
                         <th className="p-4 lg:p-6">เจ้าของโครงงาน</th>
@@ -536,7 +536,7 @@ export default function TeacherDashboard() {
       {editingStudent && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6">
           {/* [RESPONSIVE] Modal ปรับ padding และ max-w ให้เหมาะสม */}
-          <div className="bg-[#1E293B] p-6 sm:p-10 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+          <div className="bg-[#1E293B] p-6 sm:p-10 rounded-4xl sm:rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl sm:text-2xl font-black text-white mb-6 sm:mb-8 text-center uppercase tracking-wider">แก้ไขข้อมูลนักเรียน</h3>
             <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -558,7 +558,7 @@ export default function TeacherDashboard() {
 
       {/* Custom Confirm Modal */}
       {confirmModal.isOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95">
             <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 bg-${confirmModal.confirmColor}-500/10 border border-${confirmModal.confirmColor}-500/20`}>
               <AlertCircle className={`w-7 h-7 sm:w-8 sm:h-8 text-${confirmModal.confirmColor}-500`} />
@@ -583,7 +583,7 @@ export default function TeacherDashboard() {
 
       {/* Custom Alert Modal */}
       {alertModal.isOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-70 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
             <button onClick={() => setAlertModal(prev => ({...prev, isOpen: false}))} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X className="w-5 h-5"/></button>
             <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 ${alertModal.type === 'success' ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'} border`}>
