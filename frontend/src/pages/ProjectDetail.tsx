@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   ArrowLeft, Send, Bot, CheckCircle, Loader2, RefreshCw, 
-  ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3, Clock 
+  ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3, Clock,
+  BookOpen, Lightbulb, X // [NEW] ไอคอนใหม่สำหรับส่วนเนื้อหา
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -24,6 +25,71 @@ interface EdpStep {
   status: string;
   attempt_count?: number;
 }
+
+// [NEW] เนื้อหาความรู้ประจำขั้นตอน (Learning Materials)
+const STEP_CONTENT = {
+  1: {
+    title: "ระบุปัญหา (Problem Identification)",
+    goal: "ทำความเข้าใจปัญหาให้ถ่องแท้",
+    questions: [
+      "ปัญหาที่เกิดขึ้นคืออะไร? (What)",
+      "ปัญหานี้เกิดกับใคร? (Who)",
+      "เกิดขึ้นที่ไหนและเมื่อไหร่? (Where/When)",
+      "ทำไมปัญหานี้ถึงสำคัญและควรได้รับการแก้ไข? (Why)"
+    ],
+    task: "เขียนอธิบายสภาพปัญหา และระบุขอบเขตของปัญหาให้ชัดเจน"
+  },
+  2: {
+    title: "รวบรวมข้อมูล (Related Information Search)",
+    goal: "ค้นหาความรู้เพื่อใช้แก้ปัญหา",
+    questions: [
+      "มีความรู้ทางวิทยาศาสตร์ คณิตศาสตร์ หรือเทคโนโลยีใดที่เกี่ยวข้องบ้าง?",
+      "มีใครเคยแก้ปัญหานี้มาก่อนไหม? เขาทำอย่างไร?",
+      "วัสดุหรืออุปกรณ์อะไรบ้างที่น่าจะนำมาใช้ได้?"
+    ],
+    task: "สรุปความรู้ ทฤษฎี หรือหลักการที่หามาได้ และบอกแหล่งที่มาของข้อมูล"
+  },
+  3: {
+    title: "ออกแบบวิธีการแก้ปัญหา (Solution Design)",
+    goal: "คิดค้นและเลือกวิธีที่ดีที่สุด",
+    questions: [
+      "มีแนวทางแก้ปัญหาที่เป็นไปได้กี่วิธี? (ลองคิดออกมาหลายๆ แบบ)",
+      "แต่ละวิธีมีข้อดี-ข้อเสียอย่างไร?",
+      "วิธีไหนเหมาะสมที่สุดภายใต้เงื่อนไขที่มี (เวลา, งบประมาณ, ความสามารถ)?"
+    ],
+    task: "อธิบายแนวคิดที่เลือก หรือวาดภาพร่าง (Sketch) ของชิ้นงาน พร้อมระบุส่วนประกอบสำคัญ"
+  },
+  4: {
+    title: "วางแผนและดำเนินการ (Planning and Development)",
+    goal: "ลงมือสร้างชิ้นงานจริง",
+    questions: [
+      "ต้องใช้วัสดุอุปกรณ์อะไรบ้าง? จำนวนเท่าไหร่?",
+      "ลำดับขั้นตอนการสร้างเป็นอย่างไร? (ทำอะไรก่อน-หลัง)",
+      "ต้องคำนึงถึงความปลอดภัยในขั้นตอนไหนบ้าง?"
+    ],
+    task: "เขียนแผนการปฏิบัติงาน หรือบันทึกขั้นตอนการสร้างชิ้นงานต้นแบบ (Prototype)"
+  },
+  5: {
+    title: "ทดสอบ ประเมินผล และปรับปรุง (Testing & Evaluation)",
+    goal: "ตรวจสอบประสิทธิภาพและแก้ไขจุดบกพร่อง",
+    questions: [
+      "จะทดสอบชิ้นงานอย่างไรให้เห็นผลชัดเจน? (กำหนดเกณฑ์การทดสอบ)",
+      "ผลการทดสอบเป็นไปตามเป้าหมายไหม?",
+      "พบจุดบกพร่องอะไร? และได้ทำการแก้ไขอย่างไร?"
+    ],
+    task: "บันทึกผลการทดสอบ (เป็นตัวเลขหรือตาราง) และอธิบายสิ่งที่ได้ปรับปรุงแก้ไข"
+  },
+  6: {
+    title: "นำเสนอผลงาน (Presentation)",
+    goal: "สื่อสารสิ่งที่ทำมาทั้งหมดให้ผู้อื่นเข้าใจ",
+    questions: [
+      "จุดเด่นของผลงานนี้คืออะไร?",
+      "ผลงานนี้แก้ปัญหาได้จริงหรือไม่?",
+      "ถ้ามีเวลาเพิ่ม จะพัฒนาอะไรต่อในอนาคต?"
+    ],
+    task: "สรุปภาพรวมของโครงงาน จุดเด่น ข้อจำกัด และข้อเสนอแนะสำหรับการพัฒนาต่อ"
+  }
+};
 
 // --- Typewriter Component ---
 const TypewriterText = ({ text, onComplete }: { text: string, onComplete?: () => void }) => {
@@ -122,6 +188,79 @@ const ThinkingBubble = () => (
   </div>
 );
 
+// --- [NEW] Content Guide Modal ---
+const ContentGuideModal = ({ step, onClose }: { step: number, onClose: () => void }) => {
+  const content = STEP_CONTENT[step as keyof typeof STEP_CONTENT];
+  if (!content) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#1E293B] w-full max-w-2xl rounded-3xl border border-slate-700 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="bg-linear-to-r from-blue-900 to-slate-900 px-8 py-6 border-b border-slate-700 flex justify-between items-start">
+          <div>
+            <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <BookOpen className="w-4 h-4" /> คู่มือการเรียนรู้
+            </div>
+            <h2 className="text-2xl font-bold text-white">{content.title}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition text-slate-400 hover:text-white">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-8 space-y-8 max-h-[70vh] overflow-y-auto">
+          {/* Goal */}
+          <div>
+            <h3 className="text-lg font-bold text-emerald-400 mb-3 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5" /> เป้าหมายของขั้นตอนนี้
+            </h3>
+            <p className="text-slate-300 bg-emerald-900/20 border border-emerald-500/20 p-4 rounded-xl leading-relaxed">
+              {content.goal}
+            </p>
+          </div>
+
+          {/* Questions */}
+          <div>
+            <h3 className="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+              <Lightbulb className="w-5 h-5" /> คำถามชวนคิด
+            </h3>
+            <ul className="space-y-3">
+              {content.questions.map((q, idx) => (
+                <li key={idx} className="flex gap-3 text-slate-300">
+                  <span className="text-amber-500 font-bold text-lg">•</span>
+                  <span>{q}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Task */}
+          <div>
+            <h3 className="text-lg font-bold text-cyan-400 mb-3 flex items-center gap-2">
+              <Sparkles className="w-5 h-5" /> สิ่งที่ต้องทำส่งครู
+            </h3>
+            <div className="text-white bg-linear-to-r from-cyan-900/40 to-blue-900/40 border border-cyan-500/30 p-5 rounded-xl">
+              {content.task}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="bg-slate-900/50 px-8 py-4 border-t border-slate-700 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/20"
+          >
+            เข้าใจแล้ว เริ่มทำเลย!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const EDP_STEPS = [
   "ระบุปัญหา",
   "รวบรวมข้อมูล",
@@ -143,9 +282,12 @@ export default function ProjectDetail() {
   const [animatingStepId, setAnimatingStepId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // [NEW] Timer State
+  // Timer State
   const startTimeRef = useRef<number>(Date.now()); 
   const [sessionTime, setSessionTime] = useState(0); 
+
+  // [NEW] Modal State
+  const [showContentGuide, setShowContentGuide] = useState(false);
 
   const lastStep = steps.length > 0 ? steps[steps.length - 1] : null;
   
@@ -165,7 +307,7 @@ export default function ProjectDetail() {
   const isProcessComplete = rawNextStep > 6;
   const currentStepNumber = isProcessComplete ? 1 : rawNextStep; 
 
-  // [NEW] Timer Logic (Reset when step changes)
+  // Timer Logic
   useEffect(() => {
     startTimeRef.current = Date.now();
     setSessionTime(0);
@@ -196,7 +338,6 @@ export default function ProjectDetail() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [steps, submitting, isProcessComplete]);
 
-  // [NEW] Helper Format Time
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -208,7 +349,6 @@ export default function ProjectDetail() {
     
     setSubmitting(true);
     
-    // [NEW] Calculate time spent
     const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
     try {
@@ -216,7 +356,7 @@ export default function ProjectDetail() {
         project_id: Number(id),
         step_number: currentStepNumber,
         content: currentInput,
-        time_spent_seconds: timeSpent // [NEW] Send time to backend
+        time_spent_seconds: timeSpent
       });
 
       const newStep = res.data;
@@ -224,7 +364,6 @@ export default function ProjectDetail() {
       setCurrentInput('');
       setAnimatingStepId(newStep.id);
       
-      // [NEW] Reset timer for next round
       startTimeRef.current = Date.now();
 
     } catch (error) {
@@ -263,12 +402,23 @@ export default function ProjectDetail() {
             </div>
           </div>
 
-          {/* [NEW] Clock Display */}
-          <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800">
-            <Clock className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span className="text-sm font-mono text-cyan-200 w-12 text-center">
-              {formatTime(sessionTime)}
-            </span>
+          <div className="flex items-center gap-4">
+            {/* [NEW] Guide Button */}
+            <button 
+              onClick={() => setShowContentGuide(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 rounded-full border border-blue-500/30 transition-all animate-pulse hover:animate-none"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span className="text-xs font-bold">คู่มือ Step {currentStepNumber}</span>
+            </button>
+
+            {/* Clock Display */}
+            <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-1.5 rounded-full border border-slate-800">
+                <Clock className="w-4 h-4 text-cyan-400 animate-pulse" />
+                <span className="text-sm font-mono text-cyan-200 w-12 text-center">
+                {formatTime(sessionTime)}
+                </span>
+            </div>
           </div>
         </div>
         
@@ -309,6 +459,27 @@ export default function ProjectDetail() {
             <Loader2 className="w-10 h-10 animate-spin mb-4 text-cyan-500"/>
             กำลังโหลดข้อมูลระบบ...
           </div>
+        )}
+
+        {/* [NEW] Initial Guide Prompt (ถ้ายังไม่มีข้อความ ให้โชว์คำแนะนำเลย) */}
+        {!loading && steps.length === 0 && (
+           <div className="flex justify-center animate-in fade-in slide-in-from-bottom-8 duration-700">
+              <div className="bg-[#1E293B]/80 backdrop-blur border border-cyan-500/30 p-8 rounded-3xl max-w-2xl text-center shadow-2xl">
+                 <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Lightbulb className="w-8 h-8 text-cyan-400" />
+                 </div>
+                 <h2 className="text-2xl font-bold text-white mb-3">ยินดีต้อนรับสู่ขั้นตอนที่ 1: ระบุปัญหา</h2>
+                 <p className="text-slate-300 mb-6 leading-relaxed">
+                    เริ่มต้นด้วยการบอกเล่าปัญหาที่คุณพบเจอ "ปัญหาคืออะไร? เกิดกับใคร? และทำไมถึงสำคัญ?"
+                 </p>
+                 <button 
+                   onClick={() => setShowContentGuide(true)}
+                   className="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-cyan-500/25 transition-all"
+                 >
+                    ดูแนวทางการเขียน
+                 </button>
+              </div>
+           </div>
         )}
 
         {steps.map((step, index) => {
@@ -417,14 +588,24 @@ export default function ProjectDetail() {
       {/* Sticky Input Footer */}
       <div className="bg-[#020617]/90 backdrop-blur-xl border-t border-white/5 p-4 pb-6 sticky bottom-0 z-20">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 mb-3 text-xs font-medium uppercase tracking-wider pl-1">
-             {isProcessComplete ? (
-               <span className="text-green-400 flex items-center gap-1 animate-bounce"><RotateCw className="w-3 h-3"/> Iteration Mode: Starting New Cycle</span>
-             ) : isRevision ? (
-               <span className="text-red-400 flex items-center gap-1 animate-pulse"><RefreshCw className="w-3 h-3"/> Revision Mode: Step {currentStepNumber}</span>
-             ) : (
-               <span className="text-cyan-400 flex items-center gap-1"><ChevronRight className="w-3 h-3"/> Current Task: Step {currentStepNumber}</span>
-             )}
+          <div className="flex items-center justify-between mb-3 pl-1">
+             <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider">
+                {isProcessComplete ? (
+                  <span className="text-green-400 flex items-center gap-1 animate-bounce"><RotateCw className="w-3 h-3"/> Iteration Mode: Starting New Cycle</span>
+                ) : isRevision ? (
+                  <span className="text-red-400 flex items-center gap-1 animate-pulse"><RefreshCw className="w-3 h-3"/> Revision Mode: Step {currentStepNumber}</span>
+                ) : (
+                  <span className="text-cyan-400 flex items-center gap-1"><ChevronRight className="w-3 h-3"/> Current Task: Step {currentStepNumber}</span>
+                )}
+             </div>
+             
+             {/* [NEW] Small Guide Button above input */}
+             <button 
+               onClick={() => setShowContentGuide(true)}
+               className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+             >
+               <BookOpen className="w-3 h-3" /> ดูแนวทาง
+             </button>
           </div>
 
           <div className="relative group">
@@ -471,6 +652,15 @@ export default function ProjectDetail() {
           </div>
         </div>
       </div>
+
+      {/* [NEW] Show Modal */}
+      {showContentGuide && (
+        <ContentGuideModal 
+          step={currentStepNumber} 
+          onClose={() => setShowContentGuide(false)} 
+        />
+      )}
+
     </div>
   );
 }
