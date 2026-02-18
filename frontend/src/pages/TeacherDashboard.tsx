@@ -78,7 +78,7 @@ export default function TeacherDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- [RESPONSIVE] Sidebar open/close state สำหรับมือถือ ---
+  // --- [RESPONSIVE] Sidebar open/close state ---
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,18 +108,18 @@ export default function TeacherDashboard() {
       setProjects(resProjects.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
-      navigate('/dashboard'); 
+      // ไม่ต้อง Navigate ออก ถ้า Error เล็กน้อย เพื่อกัน Loop Redirect
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, []); // [FIXED] ถอด dependencies ออกให้หมดเพื่อความชัวร์
 
+  // [FIXED] ใช้ [] เท่านั้น เพื่อให้รันแค่ครั้งแรก และตั้ง Interval
   useEffect(() => {
     fetchData(); 
-    const interval = setInterval(fetchData, 5000); 
+    const interval = setInterval(fetchData, 10000); // ปรับเป็น 10 วินาที เพื่อลดโหลด Server
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // <--- ต้องเป็น Array ว่างเท่านั้น! ห้ามใส่ fetchData
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -236,7 +236,7 @@ export default function TeacherDashboard() {
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-300 font-kanit flex relative">
       
-      {/* --- [RESPONSIVE] Overlay สำหรับปิด Sidebar บนมือถือ --- */}
+      {/* --- [RESPONSIVE] Overlay --- */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-20 lg:hidden"
@@ -245,7 +245,6 @@ export default function TeacherDashboard() {
       )}
 
       {/* Sidebar */}
-      {/* [RESPONSIVE] บนมือถือ: hidden ซ่อนไว้, ใช้ translate เปิด/ปิด | บน desktop: fixed ปกติ */}
       <aside className={`
         w-72 bg-[#1E293B] border-r border-slate-800 flex flex-col fixed h-full z-30 shadow-2xl
         transition-transform duration-300 ease-in-out
@@ -263,7 +262,7 @@ export default function TeacherDashboard() {
                 <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter">Command & Analytics</span>
               </div>
             </div>
-            {/* [RESPONSIVE] ปุ่มปิด Sidebar บนมือถือ */}
+            {/* [RESPONSIVE] Close Sidebar Button */}
             <button
               className="lg:hidden text-slate-400 hover:text-white p-1"
               onClick={() => setSidebarOpen(false)}
@@ -304,10 +303,9 @@ export default function TeacherDashboard() {
       </aside>
 
       {/* Main Content */}
-      {/* [RESPONSIVE] บนมือถือไม่มี ml-72, บน desktop มี ml-72 */}
       <main className="flex-1 lg:ml-72 min-w-0">
 
-        {/* [RESPONSIVE] Top Bar สำหรับมือถือ — แสดง Hamburger + ชื่อหน้า */}
+        {/* [RESPONSIVE] Top Bar Mobile */}
         <div className="lg:hidden sticky top-0 z-10 bg-[#0F172A]/95 backdrop-blur border-b border-slate-800 flex items-center gap-4 px-4 py-3">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -328,7 +326,6 @@ export default function TeacherDashboard() {
           {/* === OVERVIEW TAB === */}
           {activeTab === 'overview' && stats && (
             <div className="space-y-6 lg:space-y-10 animate-in fade-in duration-700">
-              {/* [RESPONSIVE] Grid ปรับจาก 1→2→3→5 คอลัมน์ตามขนาดหน้าจอ */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 lg:gap-6">
                 <StatCard title="Active Users" value={stats.total_active_users} icon={Signal} colorClass="cyan" subValue="Online" />
                 <StatCard title="นักเรียนทั้งหมด" value={stats.total_students} icon={Users} colorClass="blue" />
@@ -337,7 +334,6 @@ export default function TeacherDashboard() {
                 <StatCard title="คะแนนเฉลี่ย" value={stats.average_score} icon={TrendingUp} colorClass="orange" />
               </div>
 
-              {/* [RESPONSIVE] Grid ล่าง 1→2 คอลัมน์ */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10">
                 {/* Class Distribution */}
                 <div className="bg-[#1E293B] p-6 lg:p-8 rounded-3xl border border-slate-800 shadow-xl">
@@ -398,9 +394,8 @@ export default function TeacherDashboard() {
           {/* === STUDENTS TAB === */}
           {activeTab === 'students' && (
             <div className="space-y-6 lg:space-y-8 animate-in slide-in-from-right-10 duration-500">
-              {/* [RESPONSIVE] Filter bar ปรับ layout แนวตั้งบนมือถือ */}
-              <div className="flex flex-col gap-4 bg-[#1E293B] p-4 sm:p-6 rounded-3xl border border-slate-800 shadow-lg">
-                <div className="relative w-full">
+              <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-[#1E293B] p-4 sm:p-6 rounded-3xl border border-slate-800 shadow-lg">
+                <div className="relative w-full md:w-1/2">
                   <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-500" />
                   <input 
                     type="text" 
@@ -410,7 +405,7 @@ export default function TeacherDashboard() {
                     className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl pl-12 pr-6 py-3.5 text-white focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
                   />
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 w-full md:w-auto">
                   <span className="text-xs font-bold text-slate-500 uppercase whitespace-nowrap">กรองห้อง:</span>
                   <select 
                     value={filterClass}
@@ -422,7 +417,6 @@ export default function TeacherDashboard() {
                 </div>
               </div>
 
-              {/* [RESPONSIVE] Table ใช้ overflow-x-auto เพื่อ scroll แนวนอนบนมือถือ */}
               <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left min-w-175">
@@ -454,7 +448,6 @@ export default function TeacherDashboard() {
                               </span>
                           </td>
 
-                          {/* [RESPONSIVE] Action buttons: บนมือถือแสดงตลอด, desktop hover */}
                           <td className="p-4 lg:p-6">
                             <div className="flex justify-end gap-2 lg:gap-3 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                               <button 
@@ -480,8 +473,7 @@ export default function TeacherDashboard() {
           {/* === PROJECTS TAB === */}
           {activeTab === 'projects' && (
             <div className="space-y-6 lg:space-y-8 animate-in slide-in-from-right-10 duration-500">
-              {/* [RESPONSIVE] Table ใช้ overflow-x-auto */}
-              <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
+               <div className="bg-[#1E293B] rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left min-w-150">
                     <thead className="bg-slate-800/50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
@@ -536,7 +528,6 @@ export default function TeacherDashboard() {
       {/* Edit Modal (Student Info) */}
       {editingStudent && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6">
-          {/* [RESPONSIVE] Modal ปรับ padding และ max-w ให้เหมาะสม */}
           <div className="bg-[#1E293B] p-6 sm:p-10 rounded-4xl sm:rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl sm:text-2xl font-black text-white mb-6 sm:mb-8 text-center uppercase tracking-wider">แก้ไขข้อมูลนักเรียน</h3>
             <div className="space-y-4 sm:space-y-6">
