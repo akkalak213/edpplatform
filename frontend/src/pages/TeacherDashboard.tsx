@@ -118,7 +118,8 @@ export default function TeacherDashboard() {
     fetchData(); 
     const interval = setInterval(fetchData, 5000); 
     return () => clearInterval(interval);
-  }, [fetchData]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
