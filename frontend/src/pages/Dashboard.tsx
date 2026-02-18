@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
-  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, CheckCircle, XCircle 
+  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, CheckCircle, XCircle, Medal, Crown 
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -21,6 +21,16 @@ interface QuizAttempt {
   passed: boolean;
   time_spent_seconds: number;
   created_at: string;
+}
+
+// [NEW] Interface สำหรับ Leaderboard
+interface LeaderboardItem {
+  student_name: string;
+  class_room: string;
+  score: number;
+  total_score: number;
+  time_spent: number;
+  submitted_at: string;
 }
 
 export default function Dashboard() {
@@ -50,8 +60,14 @@ export default function Dashboard() {
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // [NEW] Leaderboard Modal State
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+
   useEffect(() => {
     fetchProjects();
+    fetchLeaderboard(); // เรียกข้อมูลจัดอันดับทันทีที่เข้าหน้าเว็บ
   }, []);
 
   const fetchProjects = async () => {
@@ -63,7 +79,6 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch Quiz History
   const fetchQuizHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -75,6 +90,23 @@ export default function Dashboard() {
       alert("ไม่สามารถดึงข้อมูลประวัติการสอบได้");
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  // [NEW] Fetch Leaderboard
+  const fetchLeaderboard = async () => {
+    setLeaderboardLoading(true);
+    try {
+      const res = await client.get('/quiz/leaderboard');
+      setLeaderboardData(res.data);
+      // เด้ง Modal ทันทีที่โหลดเสร็จ (ถ้ามีข้อมูล)
+      if (res.data.length > 0) {
+        setShowLeaderboard(true);
+      }
+    } catch (err) {
+      console.error("Failed to fetch leaderboard", err);
+    } finally {
+      setLeaderboardLoading(false);
     }
   };
 
@@ -143,7 +175,6 @@ export default function Dashboard() {
         setShowPasswordModal(false);
         setPassForm({ old: '', new: '', confirm: '' });
     } catch (err) {
-        // [FIXED] Type Assertion แทน any
         const error = err as { response?: { data?: { detail?: string } } };
         const errorMsg = error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง";
         alert("เกิดข้อผิดพลาด: " + errorMsg);
@@ -601,6 +632,80 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- [NEW] Leaderboard Modal --- */}
+      {showLeaderboard && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowLeaderboard(false)}></div>
+          
+          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-3xl p-8 shadow-2xl animate-modal-pop border-amber-500/20 overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-amber-400 to-orange-600"></div>
+            
+            <div className="flex justify-between items-center mb-6 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
+                    <Crown className="w-6 h-6 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">อันดับคะแนนสูงสุด</h3>
+                    <p className="text-xs text-slate-500">Top 20 นักเรียนที่ทำคะแนนได้ดีที่สุด</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowLeaderboard(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400"/></button>
+            </div>
+
+            <div className="overflow-y-auto custom-scrollbar flex-1 -mr-2 pr-2">
+              {leaderboardLoading ? (
+                <div className="flex justify-center items-center py-20">
+                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                </div>
+              ) : leaderboardData.length === 0 ? (
+                <div className="text-center py-10 text-slate-500">ยังไม่มีข้อมูลการสอบ</div>
+              ) : (
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-xs text-slate-500 border-b border-slate-700/50">
+                      <th className="py-3 pl-4 font-medium w-16">อันดับ</th>
+                      <th className="py-3 font-medium">ชื่อ - นามสกุล</th>
+                      <th className="py-3 font-medium hidden sm:table-cell">ห้องเรียน</th>
+                      <th className="py-3 font-medium text-center">เวลาที่ใช้</th>
+                      <th className="py-3 pr-4 font-medium text-right">คะแนน</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {leaderboardData.map((item, index) => (
+                      <tr key={index} className={`border-b border-slate-800/50 hover:bg-white/5 transition-colors group
+                        ${index === 0 ? 'bg-amber-500/5' : ''}
+                      `}>
+                        <td className="py-4 pl-4">
+                          {index === 0 ? <Medal className="w-5 h-5 text-amber-400" /> :
+                           index === 1 ? <Medal className="w-5 h-5 text-slate-300" /> :
+                           index === 2 ? <Medal className="w-5 h-5 text-orange-400" /> :
+                           <span className="text-slate-500 font-mono ml-1.5">{index + 1}</span>}
+                        </td>
+                        <td className="py-4 font-medium text-slate-200 group-hover:text-white transition-colors">
+                          {item.student_name}
+                          {index === 0 && <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">ที่ 1</span>}
+                        </td>
+                        <td className="py-4 text-slate-400 hidden sm:table-cell">{item.class_room}</td>
+                        <td className="py-4 text-center text-slate-500 font-mono text-xs">
+                          {Math.floor(item.time_spent / 60)}:{(item.time_spent % 60).toString().padStart(2, '0')}
+                        </td>
+                        <td className="py-4 pr-4 text-right">
+                          <span className={`font-bold font-mono text-lg ${index < 3 ? 'text-white' : 'text-slate-300'}`}>
+                            {item.score}
+                          </span>
+                          <span className="text-xs text-slate-600 ml-1">/{item.total_score}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>

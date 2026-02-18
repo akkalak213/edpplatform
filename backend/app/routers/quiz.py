@@ -92,3 +92,26 @@ def get_quiz_history(
 ):
     attempts = db.query(QuizAttempt).filter(QuizAttempt.student_id == current_user.id).order_by(QuizAttempt.created_at.desc()).all()
     return attempts
+
+@router.get("/leaderboard")
+def get_leaderboard(db: Session = Depends(get_db)):
+    # Query: Join ตาราง QuizAttempt กับ User เพื่อเอาชื่อนักเรียน
+    # Order by: Score (Desc), Time (Asc), CreatedAt (Asc)
+    results = db.query(QuizAttempt, User).join(User, QuizAttempt.student_id == User.id).order_by(
+        QuizAttempt.score.desc(),
+        QuizAttempt.time_spent_seconds.asc(),
+        QuizAttempt.created_at.asc()
+    ).limit(20).all() # เอาแค่ Top 20 คนเก่ง
+
+    leaderboard = []
+    for attempt, user in results:
+        leaderboard.append({
+            "student_name": f"{user.first_name} {user.last_name}",
+            "class_room": user.class_room,
+            "score": attempt.score,
+            "total_score": attempt.total_score,
+            "time_spent": attempt.time_spent_seconds,
+            "submitted_at": attempt.created_at
+        })
+    
+    return leaderboard
