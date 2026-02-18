@@ -112,14 +112,14 @@ export default function TeacherDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []); // [FIXED] ถอด dependencies ออกให้หมดเพื่อความชัวร์
+  }, []);
 
-  // [FIXED] ใช้ [] เท่านั้น เพื่อให้รันแค่ครั้งแรก และตั้ง Interval
   useEffect(() => {
     fetchData(); 
     const interval = setInterval(fetchData, 10000); // ปรับเป็น 10 วินาที เพื่อลดโหลด Server
     return () => clearInterval(interval);
-  }, []); // <--- ต้องเป็น Array ว่างเท่านั้น! ห้ามใส่ fetchData
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <--- ต้องเป็น Array ว่างเท่านั้น และใส่ eslint-disable เพื่อป้องกันการแก้ Auto
 
   const handleLogout = () => {
     localStorage.removeItem('token');
