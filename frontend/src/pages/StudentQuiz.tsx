@@ -51,22 +51,26 @@ export default function StudentQuiz() {
   const [timeSeconds, setTimeSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
 
-  // [NEW] State สำหรับ Modal ยืนยันการออก
+  // State สำหรับ Modal ยืนยันการออก
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // --- 🚫 ANTI-CHEAT STATE & REFS 🚫 ---
   const [cheatingDetected, setCheatingDetected] = useState(false);
   const isQuizActiveRef = useRef(false);
 
+  // [FIXED] อุดช่องโหว่: เอาเงื่อนไข !showExitConfirm ออก
+  // ต่อให้เปิด Modal ยืนยันค้างไว้ ถ้าสลับจอ ก็ต้องโดนจับโกงทันที
   useEffect(() => {
-    // เพิ่มเงื่อนไข: ถ้า Modal ยืนยันออกเปิดอยู่ ถือว่ายังไม่โกง (เพราะผู้ใช้เป็นคนกดเอง)
-    isQuizActiveRef.current = quizStarted && !quizFinished && !showExitConfirm;
-  }, [quizStarted, quizFinished, showExitConfirm]);
+    isQuizActiveRef.current = quizStarted && !quizFinished;
+  }, [quizStarted, quizFinished]);
 
   useEffect(() => {
     const handleViolation = () => {
+      // เช็คว่ากำลังสอบอยู่ไหม (โดยไม่สนว่าเปิด Modal ยืนยันอยู่หรือเปล่า)
       if (isQuizActiveRef.current) {
         setCheatingDetected(true);
+        // ปิด Modal ยืนยันทันที เพื่อแสดงหน้าจอจับโกงแทน
+        setShowExitConfirm(false); 
         if (timerRef.current) clearInterval(timerRef.current);
       }
     };
@@ -104,7 +108,6 @@ export default function StudentQuiz() {
   // Handle Back Button Logic
   const handleBackCheck = () => {
     if (quizStarted && !quizFinished && !cheatingDetected) {
-      // เปิด Custom Modal แทนการใช้ window.confirm
       setShowExitConfirm(true);
     } else {
       navigate('/dashboard');
@@ -124,7 +127,8 @@ export default function StudentQuiz() {
   }, []);
 
   useEffect(() => {
-    if (quizStarted && !quizFinished && !cheatingDetected && !showExitConfirm) {
+    // Timer เดินตลอดตราบเท่าที่ยังไม่จบการสอบและยังไม่โดนจับโกง (แม้จะเปิด Modal ยืนยันอยู่ เวลาต้องเดินต่อ)
+    if (quizStarted && !quizFinished && !cheatingDetected) {
       timerRef.current = window.setInterval(() => {
         setTimeSeconds(prev => prev + 1);
       }, 1000);
@@ -132,7 +136,7 @@ export default function StudentQuiz() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [quizStarted, quizFinished, cheatingDetected, showExitConfirm]);
+  }, [quizStarted, quizFinished, cheatingDetected]);
 
   const fetchQuestions = async () => {
     try {
@@ -184,6 +188,7 @@ export default function StudentQuiz() {
 
     setSubmitting(true);
     setQuizFinished(true);
+    setShowExitConfirm(false); // ปิด Modal ยืนยันถ้ามีค้างอยู่
     
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -329,7 +334,6 @@ export default function StudentQuiz() {
       {/* Header */}
       <header className="px-6 py-4 border-b border-slate-800 bg-[#0F172A] flex justify-between items-center sticky top-0 z-20">
         <div className="flex items-center gap-4">
-          {/* ใช้ handleBackCheck แทน navigate */}
           <button onClick={handleBackCheck} className="p-2 hover:bg-slate-800 rounded-full transition"><ArrowLeft className="w-5 h-5" /></button>
           <div>
             <h2 className="text-white font-bold">ข้อที่ {currentQIndex + 1} <span className="text-slate-500 text-sm">/ {questions.length}</span></h2>
