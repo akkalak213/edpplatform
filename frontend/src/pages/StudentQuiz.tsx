@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   ArrowLeft, Clock, CheckCircle, 
-  ChevronRight, Trophy, RotateCw, Play, Lock, Unlock 
+  ChevronRight, Trophy, RotateCw, Play, Lock, Unlock, Loader2, AlertTriangle 
 } from 'lucide-react';
 
 interface Question {
@@ -37,18 +37,47 @@ export default function StudentQuiz() {
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({}); // { qId: choiceIdx }
-  const [isLocked, setIsLocked] = useState(false); // สถานะยืนยันคำตอบ
+  const [answers, setAnswers] = useState<Record<number, number>>({}); 
+  const [isLocked, setIsLocked] = useState(false); 
   
   const [quizStarted, setQuizStarted] = useState(false);
   const [quizFinished, setQuizFinished] = useState(false);
   
-  // [FIX] กำหนด Type ให้ชัดเจนแทน any
+  const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<QuizResult | null>(null);
   
   // Timer
   const [timeSeconds, setTimeSeconds] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  // --- [NEW] 🚫 ANTI-CHEAT SYSTEM 🚫 ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // ถ้านักเรียนออกจากหน้าจอ (Hidden) AND กำลังสอบอยู่ AND ยังส่งไม่เสร็จ
+      if (document.hidden && quizStarted && !quizFinished) {
+        // 1. แจ้งเตือน
+        alert("⚠️ พบพฤติกรรมการโกงข้อสอบ! ⚠️\n\nระบบตรวจพบว่าคุณพยายามออกจากหน้าจอสอบ\n\n⛔ การสอบรอบนี้ถือเป็นโมฆะ\n🔄 ระบบจะบังคับให้เริ่มทำข้อสอบใหม่ตั้งแต่ข้อ 1");
+        
+        // 2. รีเซ็ตทุกอย่างกลับไปจุดเริ่มต้น (Force Reset)
+        setQuizStarted(false);
+        setCurrentQIndex(0);
+        setAnswers({});
+        setTimeSeconds(0);
+        setIsLocked(false);
+        setSubmitting(false);
+        if (timerRef.current) clearInterval(timerRef.current);
+      }
+    };
+
+    // ฝัง Event Listener
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // ล้าง Event เมื่อ Component ถูกทำลาย (Cleanup)
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [quizStarted, quizFinished]); // ทำงานเมื่อสถานะการสอบเปลี่ยน
+  // -------------------------------------
 
   useEffect(() => {
     fetchQuestions();
@@ -70,7 +99,6 @@ export default function StudentQuiz() {
       const res = await client.get('/quiz/questions');
       setQuestions(res.data);
     } catch (err) {
-      // [FIX] ใช้ console.error เพื่อให้ err ถูกใช้งาน
       console.error("Failed to fetch questions:", err);
     } finally {
       setLoading(false);
@@ -78,12 +106,17 @@ export default function StudentQuiz() {
   };
 
   const handleStart = () => {
-    setQuizStarted(true);
+    // รีเซ็ตค่าก่อนเริ่มเสมอ เพื่อความชัวร์
+    setCurrentQIndex(0);
+    setAnswers({});
     setTimeSeconds(0);
+    setIsLocked(false);
+    setSubmitting(false);
+    setQuizStarted(true);
   };
 
   const handleSelectChoice = (choiceIdx: number) => {
-    if (isLocked) return; // ถ้าล็อคแล้วห้ามเปลี่ยน
+    if (isLocked) return; 
     const qId = questions[currentQIndex].id;
     setAnswers(prev => ({ ...prev, [qId]: choiceIdx }));
   };
@@ -99,14 +132,18 @@ export default function StudentQuiz() {
   const handleNext = () => {
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex(prev => prev + 1);
-      setIsLocked(false); // รีเซ็ตล็อคสำหรับข้อใหม่
+      setIsLocked(false); 
     } else {
       finishQuiz();
     }
   };
 
   const finishQuiz = async () => {
+    if (submitting) return;
+
+    setSubmitting(true);
     setQuizFinished(true);
+    
     if (timerRef.current) clearInterval(timerRef.current);
 
     try {
@@ -116,9 +153,10 @@ export default function StudentQuiz() {
       });
       setResult(res.data);
     } catch (err) {
-      // [FIX] ใช้ console.error เพื่อให้ err ถูกใช้งาน
       console.error("Failed to submit quiz:", err);
-      alert("ส่งข้อสอบไม่สำเร็จ");
+      alert("ส่งข้อสอบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setSubmitting(false);
+      setQuizFinished(false); 
     }
   };
 
@@ -135,7 +173,6 @@ export default function StudentQuiz() {
     return (
       <div className="min-h-screen bg-[#020617] text-slate-300 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-[#1E293B] border border-slate-700 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
-          {/* [FIX] bg-gradient-to-r -> bg-linear-to-r */}
           <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-cyan-500 to-blue-600"></div>
           
           <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-400">
@@ -148,7 +185,7 @@ export default function StudentQuiz() {
             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> มีทั้งหมด 40 ข้อ</p>
             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> ไม่จำกัดเวลา (แต่มีการจับเวลา)</p>
             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> เกณฑ์ผ่านคือ 80% (32 ข้อขึ้นไป)</p>
-            <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> ทำได้หลายรอบ ระบบจะบันทึกทุกครั้ง</p>
+            <p className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-400"/> ห้ามออกจากหน้าจอเด็ดขาด (Anti-Cheat)</p>
           </div>
 
           <button onClick={handleStart} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-500/25 transition-all flex items-center justify-center gap-2">
@@ -182,7 +219,6 @@ export default function StudentQuiz() {
           <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-6">
             <h3 className="text-white font-bold mb-4">เฉลยละเอียด</h3>
             <div className="space-y-3">
-              {/* [FIX] กำหนด Type ให้ log แทน any */}
               {result.details.map((log: AnswerLog, idx: number) => (
                 <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${log.is_correct ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
                   <div>
@@ -216,6 +252,7 @@ export default function StudentQuiz() {
   const currentQ = questions[currentQIndex];
   const selectedChoice = answers[currentQ.id];
   const hasAnswered = selectedChoice !== undefined;
+  const isLastQuestion = currentQIndex === questions.length - 1;
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-300 font-kanit flex flex-col">
@@ -240,6 +277,14 @@ export default function StudentQuiz() {
 
       {/* Main Content */}
       <main className="flex-1 p-6 max-w-3xl mx-auto w-full flex flex-col justify-center">
+        {/* Loading Overlay when submitting */}
+        {submitting && (
+           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-in fade-in">
+              <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mb-4" />
+              <p className="text-white text-lg animate-pulse">กำลังส่งข้อสอบ...</p>
+           </div>
+        )}
+
         <div className="bg-[#1E293B]/50 border border-slate-700 rounded-3xl p-8 mb-8 backdrop-blur-sm">
           <span className="inline-block px-3 py-1 rounded-lg bg-blue-500/10 text-blue-400 text-xs font-bold mb-4 border border-blue-500/20">
             {currentQ.category || "General"}
@@ -254,12 +299,12 @@ export default function StudentQuiz() {
             <button
               key={idx}
               onClick={() => handleSelectChoice(idx)}
-              disabled={isLocked}
+              disabled={isLocked || submitting}
               className={`w-full p-5 rounded-2xl border text-left transition-all relative overflow-hidden group
                 ${selectedChoice === idx 
                   ? 'bg-cyan-600/20 border-cyan-500 text-white shadow-[0_0_15px_rgba(8,145,178,0.3)]' 
                   : 'bg-[#1E293B] border-slate-700 text-slate-400 hover:bg-[#263345] hover:border-slate-600'}
-                ${isLocked ? 'cursor-not-allowed opacity-80' : ''}
+                ${(isLocked || submitting) ? 'cursor-not-allowed opacity-80' : ''}
               `}
             >
               <div className="flex items-center gap-4">
@@ -283,7 +328,7 @@ export default function StudentQuiz() {
           {!isLocked ? (
             <button 
               onClick={handleConfirm}
-              disabled={!hasAnswered}
+              disabled={!hasAnswered || submitting}
               className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2"
             >
               <Lock className="w-5 h-5" /> ยืนยันคำตอบ
@@ -292,6 +337,7 @@ export default function StudentQuiz() {
             <>
               <button 
                 onClick={handleEdit}
+                disabled={submitting}
                 className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold border border-slate-600 transition-all flex items-center justify-center gap-2"
               >
                 <Unlock className="w-5 h-5" /> แก้ไข
@@ -299,10 +345,18 @@ export default function StudentQuiz() {
               
               <button 
                 onClick={handleNext}
-                // [FIX] flex-[2] -> flex-2, bg-gradient-to-r -> bg-linear-to-r
-                className="flex-2 py-4 bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl font-bold shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-2"
+                disabled={submitting}
+                className={`flex-2 py-4 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2
+                  ${isLastQuestion 
+                    ? 'bg-green-600 hover:bg-green-500 shadow-green-500/20' 
+                    : 'bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-500/20'}
+                `}
               >
-                {currentQIndex === questions.length - 1 ? 'ส่งข้อสอบ' : 'ข้อถัดไป'} <ChevronRight className="w-5 h-5" />
+                {isLastQuestion ? (
+                   submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'ส่งข้อสอบ'
+                ) : (
+                   <>ข้อถัดไป <ChevronRight className="w-5 h-5" /></>
+                )}
               </button>
             </>
           )}
