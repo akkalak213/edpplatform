@@ -11,6 +11,7 @@ import TeacherProjectDetail from './pages/TeacherProjectDetail';
 
 // [NEW] Import ยามเฝ้าประตู
 import ProtectedRoute from './components/ProtectedRoute';
+import StudentQuiz from './pages/StudentQuiz';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
         <Route element={<ProtectedRoute allowedRoles={['student']} />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/project/:id" element={<ProjectDetail />} />
+          <Route path="/student/quiz" element={<StudentQuiz />} />
         </Route>
 
         {/* 2. สำหรับครู (Role: teacher) */}

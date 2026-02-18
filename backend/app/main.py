@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.models import edp
 from app.routers import edp as edp_router, auth, analytics
-
+from app.routers import quiz
 # สร้างตารางใน DB (ถ้ายังไม่มี)
 edp.Base.metadata.create_all(bind=engine)
 
@@ -27,7 +27,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(edp_router.router)
 app.include_router(analytics.router)
-
+app.include_router(quiz.router)
 @app.get("/")
 def home():
     return {"message": "EDP AI System Backend is Secure & Ready!", "docs": "/docs"}

@@ -111,3 +111,32 @@ class DashboardStats(BaseModel):
 class ChangePassword(BaseModel):
     old_password: str
     new_password: str
+
+# ==========================================
+# 📝 QUIZ SCHEMAS (ส่วนที่เพิ่มใหม่)
+# ==========================================
+
+class QuizSubmission(BaseModel):
+    answers: Dict[int, int] # { question_id: selected_choice_index }
+    time_spent_seconds: int
+
+class QuizQuestionResponse(BaseModel):
+    id: int
+    question_text: str
+    choices: List[str]
+    order: int
+    category: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class QuizAttemptResponse(BaseModel):
+    id: int
+    score: int
+    total_score: int
+    passed: bool
+    time_spent_seconds: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

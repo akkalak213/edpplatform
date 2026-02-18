@@ -90,3 +90,30 @@ class EdpStep(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     project = relationship("Project", back_populates="steps")
+
+# 4. ตารางแม่แบบข้อสอบ (เก็บโจทย์และเฉลย)
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_text = Column(Text)
+    choices = Column(JSON) # เก็บเป็น list ["ก...", "ข...", "ค...", "ง..."]
+    correct_choice_index = Column(Integer) # เก็บ index เฉลย (0=ก, 1=ข, 2=ค, 3=ง)
+    category = Column(String, nullable=True) # เช่น "ความคิดริเริ่ม", "ความคิดยืดหยุ่น"
+    order = Column(Integer) # ลำดับข้อ
+
+# 5. ตารางประวัติการสอบ (QuizAttempt)
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("users.id"))
+    
+    score = Column(Integer) # คะแนนที่ได้
+    total_score = Column(Integer) # คะแนนเต็ม
+    passed = Column(Boolean) # ผ่านเกณฑ์ 80% ไหม
+    
+    time_spent_seconds = Column(Integer) # เวลาที่ใช้ (วินาที)
+    answers_log = Column(JSON) # เก็บ Log การตอบรายข้อ [{"q_id":1, "choice":0, "is_correct":True}, ...]
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
