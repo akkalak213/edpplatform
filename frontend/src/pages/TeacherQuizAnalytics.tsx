@@ -4,6 +4,7 @@ import {
   Users, CheckCircle, TrendingUp, AlertTriangle, Search, Trash2, 
   Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 // --- Interfaces ---
 interface OverviewStats {
@@ -95,7 +96,6 @@ export default function TeacherQuizAnalytics() {
   };
 
   const handleResetConfirm = () => {
-    // ไปขั้นตอนพิมพ์ RESET
     setResetModal(prev => ({ ...prev, step: 'type', typeValue: '' }));
   };
 
@@ -130,6 +130,13 @@ export default function TeacherQuizAnalytics() {
     s.student_id.includes(searchTerm) ||
     s.class_room.includes(searchTerm)
   );
+
+  // Prepare Data for Chart
+  const chartData = items.slice(0, 10).map(item => ({
+    name: `ข้อ ${item.id}`,
+    accuracy: item.accuracy_percent,
+    question: item.question.length > 30 ? item.question.substring(0, 30) + "..." : item.question
+  }));
 
   if (loading) return (
     <div className="flex items-center justify-center h-64 text-slate-400 gap-2">
@@ -175,10 +182,10 @@ export default function TeacherQuizAnalytics() {
         </div>
       </div>
 
-      {/* 2. Item Analysis Ranking */}
+      {/* 2. Charts & Item Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#1E293B] rounded-3xl border border-slate-700 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
+        <div className="lg:col-span-2 bg-[#1E293B] p-6 rounded-3xl border border-slate-700 shadow-lg">
+          <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-400" /> 10 อันดับข้อที่ตอบผิดมากที่สุด
             </h3>
@@ -187,59 +194,39 @@ export default function TeacherQuizAnalytics() {
             </button>
           </div>
           
-          <div className="p-4 space-y-3">
-            {items.length > 0 ? (
-              items.slice(0, 10).map((item, index) => {
-                const wrongPercent = (100 - item.accuracy_percent).toFixed(1);
-                return (
-                  <div key={item.id} className="group bg-[#0F172A] border border-slate-800 rounded-2xl p-4 transition-all hover:border-slate-600">
-                    <div className="flex items-start gap-4">
-                      <div className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg
-                        ${index === 0 ? 'bg-red-500 text-white' : 'bg-slate-800 text-slate-400'}
-                      `}>
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <span className="text-xs font-bold text-indigo-400 uppercase tracking-tighter bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                            ข้อที่ {item.order}
-                          </span>
-                          <span className="text-[10px] text-slate-500 hidden sm:inline">
-                            {item.category}
-                          </span>
-                        </div>
-                        <p className="text-slate-200 text-sm font-medium line-clamp-2 mb-3 italic">
-                          "{item.question}"
-                        </p>
-                        
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
-                            <span className="text-red-400">อัตราตอบผิด {wrongPercent}%</span>
-                            <span className="text-slate-500">{item.correct_count}/{item.total_attempts} คนตอบถูก</span>
-                          </div>
-                          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full transition-all duration-1000 ${index < 3 ? 'bg-red-500' : 'bg-amber-500'}`}
-                              style={{ width: `${100 - item.accuracy_percent}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="h-75 flex flex-col items-center justify-center text-slate-500">
-                <AlertCircle className="w-12 h-12 mb-3 opacity-20" />
-                <p>ยังไม่มีข้อมูลสถิติรายข้อ (ต้องมีนักเรียนสอบก่อน)</p>
+          {chartData.length > 0 ? (
+            <div className="h-75 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 30, top: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" horizontal={false} />
+                  <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" />
+                  <YAxis dataKey="name" type="category" stroke="#94a3b8" width={50} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0F172A', borderColor: '#334155', color: '#fff' }}
+                    cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  />
+                  <Bar dataKey="accuracy" radius={[0, 4, 4, 0]}>
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.accuracy < 50 ? '#EF4444' : '#EAB308'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="mt-4 flex justify-center gap-6 text-xs text-slate-400">
+                <div className="flex items-center gap-2"><span className="w-3 h-3 bg-red-500 rounded-sm"></span> ตอบถูกน้อยกว่า 50% (ยากมาก)</div>
+                <div className="flex items-center gap-2"><span className="w-3 h-3 bg-yellow-500 rounded-sm"></span> ตอบถูก 50% ขึ้นไป (ปานกลาง)</div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="h-75 w-full flex flex-col items-center justify-center text-slate-500 bg-slate-800/30 rounded-2xl border border-slate-700 border-dashed">
+                <AlertCircle className="w-10 h-10 mb-2 opacity-50"/>
+                <p>ยังไม่มีข้อมูลการสอบในระบบ</p>
+            </div>
+          )}
         </div>
 
         {/* Action Panel */}
-        <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-700 shadow-xl flex flex-col justify-between h-full min-h-75">
+        <div className="bg-[#1E293B] p-6 rounded-3xl border border-slate-700 shadow-lg flex flex-col justify-between min-h-75">
           <div>
             <div className="w-12 h-12 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 border border-red-500/20 text-red-500">
               <RefreshCw className="w-6 h-6" />
@@ -267,7 +254,7 @@ export default function TeacherQuizAnalytics() {
       <div className="bg-[#1E293B] rounded-3xl border border-slate-700 shadow-2xl overflow-hidden">
         <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex flex-col sm:flex-row justify-between items-center gap-4">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-cyan-400" /> รายชื่อและผลการสอบรายคน
+            <Users className="w-5 h-5 text-cyan-400" /> รายชื่อนักเรียนและผลการสอบ
           </h3>
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -281,47 +268,50 @@ export default function TeacherQuizAnalytics() {
           </div>
         </div>
 
-        {/* Desktop View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-800/50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <th className="p-6">รหัสนักเรียน</th>
-                <th className="p-6">ชื่อ-นามสกุล</th>
-                <th className="p-6">ห้อง</th>
-                <th className="p-6 text-center">สอบ (ครั้ง)</th>
-                <th className="p-6 text-center">ล่าสุด</th>
-                <th className="p-6 text-center text-amber-500">ดีที่สุด</th>
-                <th className="p-6 text-center">สถานะ</th>
+              <tr className="bg-slate-800/50 text-slate-400 text-xs uppercase tracking-wider">
+                <th className="p-4 font-medium">รหัสนักเรียน</th>
+                <th className="p-4 font-medium">ชื่อ-นามสกุล</th>
+                <th className="p-4 font-medium">ห้องเรียน</th>
+                <th className="p-4 font-medium text-center">สอบไป (ครั้ง)</th>
+                <th className="p-4 font-medium text-center">คะแนนล่าสุด</th>
+                <th className="p-4 font-medium text-center">คะแนนดีสุด</th>
+                <th className="p-4 font-medium text-center">สถานะ</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-slate-800">
+            <tbody className="text-sm divide-y divide-slate-700/50">
               {filteredStudents.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="p-20 text-center text-slate-500 italic">ไม่พบข้อมูลนักเรียน</td>
                 </tr>
               ) : (
                 filteredStudents.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/40 transition-colors group">
-                    <td className="p-6 font-mono text-cyan-400 font-bold">{s.student_id}</td>
-                    <td className="p-6 text-white font-bold">{s.name}</td>
-                    <td className="p-6 text-slate-400">{s.class_room}</td>
-                    <td className="p-6 text-center">
-                      <span className="bg-slate-700 text-slate-300 px-3 py-1 rounded-lg text-xs font-black">{s.attempts_count}</span>
+                  <tr key={s.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="p-4 font-mono text-cyan-400">{s.student_id}</td>
+                    <td className="p-4 text-white font-medium">{s.name}</td>
+                    <td className="p-4 text-slate-400">{s.class_room}</td>
+                    <td className="p-4 text-center">
+                      <span className="bg-slate-700 text-white px-2 py-1 rounded-md text-xs">{s.attempts_count}</span>
                     </td>
-                    <td className="p-6 text-center text-slate-300 font-mono">{s.latest_score}</td>
-                    <td className="p-6 text-center font-mono font-black text-lg text-white">{s.best_score}</td>
-                    <td className="p-6 text-center">
+                    <td className="p-4 text-center text-slate-300">{s.latest_score}</td>
+                    <td className="p-4 text-center">
+                      <span className="font-bold text-emerald-400">{s.best_score}</span>
+                    </td>
+                    <td className="p-4 text-center">
                       {s.attempts_count === 0 ? (
-                        <span className="text-slate-600 text-[10px] uppercase font-bold tracking-widest">ยังไม่สอบ</span>
-                      ) : s.best_score >= 32 ? (
-                        <div className="flex items-center justify-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 text-xs font-black">
-                          <CheckCircle className="w-3.5 h-3.5" /> ผ่าน
-                        </div>
+                        <span className="inline-flex items-center gap-1 text-slate-500 text-xs">
+                          ยังไม่สอบ
+                        </span>
+                      ) : s.best_score >= 32 ? ( 
+                        <span className="inline-flex items-center gap-1 text-emerald-400 text-xs font-bold bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                          <CheckCircle className="w-3 h-3" /> ผ่านแล้ว
+                        </span>
                       ) : (
-                        <div className="flex items-center justify-center gap-1.5 text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl border border-red-500/20 text-xs font-black">
-                          <XCircle className="w-3.5 h-3.5" /> ไม่ผ่าน
-                        </div>
+                        <span className="inline-flex items-center gap-1 text-red-400 text-xs font-bold bg-red-500/10 px-2 py-1 rounded-full border border-red-500/20">
+                          <XCircle className="w-3 h-3" /> ไม่ผ่าน
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -330,46 +320,11 @@ export default function TeacherQuizAnalytics() {
             </tbody>
           </table>
         </div>
-
-        {/* Mobile View */}
-        <div className="md:hidden divide-y divide-slate-800">
-          {filteredStudents.map((s) => (
-            <div key={s.id} className="p-5 space-y-4 hover:bg-slate-800/30 transition-colors">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="text-[10px] font-mono text-cyan-500 font-bold mb-0.5">{s.student_id}</div>
-                  <div className="text-white font-bold">{s.name}</div>
-                  <div className="text-xs text-slate-500">{s.class_room}</div>
-                </div>
-                {s.attempts_count > 0 && (
-                   <div className={`text-xs font-black px-2 py-1 rounded-lg ${s.best_score >= 32 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                     {s.best_score >= 32 ? 'PASS' : 'FAIL'}
-                   </div>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center bg-[#0F172A] p-3 rounded-2xl border border-slate-800">
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">สอบ</div>
-                  <div className="text-white font-black">{s.attempts_count}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">ล่าสุด</div>
-                  <div className="text-white font-black">{s.latest_score}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">ดีสุด</div>
-                  <div className="text-white font-black">{s.best_score}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-          {filteredStudents.length === 0 && <div className="p-10 text-center text-slate-600">ไม่พบข้อมูล</div>}
-        </div>
       </div>
 
-      {/* ===== RESET MODAL ===== */}
+      {/* ===== RESET MODAL (3 STEPS) ===== */}
       {resetModal.isOpen && (
-        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-70 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
 
             {/* ปุ่มปิด (ทุก step) */}
