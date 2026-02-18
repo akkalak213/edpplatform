@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import desc, func, distinct, case, and_
 # [FIX] เพิ่ม timedelta เข้ามาสำหรับการคำนวณเวลา Active
 from datetime import datetime, timezone, timedelta 
 from typing import List
@@ -22,7 +22,7 @@ def get_ai_service():
     return GeminiService()
 
 # ==========================================
-# 📊 TEACHER ANALYTICS & MANAGEMENT (ส่วนใหม่ + Realtime)
+# 📊 TEACHER ANALYTICS & MANAGEMENT (Optimized)
 # ==========================================
 
 @router.get("/teacher/stats", response_model=DashboardStats)
@@ -34,15 +34,15 @@ def get_dashboard_stats(
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied: Teachers only")
 
-    # 2. คำนวณสถิติพื้นฐาน
-    total_students = db.query(User).filter(User.role == 'student').count()
-    total_projects = db.query(Project).count()
+    # 2. คำนวณสถิติพื้นฐาน (Optimized Queries)
+    total_students = db.query(func.count(User.id)).filter(User.role == 'student').scalar()
+    total_projects = db.query(func.count(Project.id)).scalar()
     
     # นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
-    completed_projects = db.query(Project).join(EdpStep).filter(
+    completed_projects = db.query(func.count(distinct(Project.id))).join(EdpStep).filter(
         EdpStep.step_number == 6,
         func.coalesce(EdpStep.teacher_score, EdpStep.score) >= 60
-    ).count()
+    ).scalar()
 
     # คะแนนเฉลี่ยรวมทุก Step ของทุกคน
     avg_score = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score))).scalar() or 0.0
@@ -57,17 +57,19 @@ def get_dashboard_stats(
 
     # [NEW] คำนวณ Active Users (เคลื่อนไหวใน 1 นาทีที่ผ่านมา - Realtime)
     one_min_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
-    total_active_users = db.query(User).filter(
+    total_active_users = db.query(func.count(User.id)).filter(
         User.role == 'student',
         User.last_active_at >= one_min_ago
-    ).count()
+    ).scalar()
 
-    # การกระจายตัวของนักเรียนในแต่ละห้อง
-    students = db.query(User).filter(User.role == 'student').all()
-    class_dist = {}
-    for s in students:
-        room = s.class_room or "Unassigned"
-        class_dist[room] = class_dist.get(room, 0) + 1
+    # [OPTIMIZED] การกระจายตัวของนักเรียนในแต่ละห้อง (ใช้ SQL Group By แทน Python Loop)
+    class_stats = db.query(
+        User.class_room, 
+        func.count(User.id)
+    ).filter(User.role == 'student').group_by(User.class_room).all()
+    
+    # แปลงผลลัพธ์จาก list of tuples เป็น dict โดยจัดการกรณีห้องว่างด้วย
+    class_dist = { (room or "Unassigned"): count for room, count in class_stats }
 
     return DashboardStats(
         total_students=total_students,
@@ -75,7 +77,6 @@ def get_dashboard_stats(
         completed_projects=completed_projects,
         average_score=round(avg_score, 2),
         class_distribution=class_dist,
-        # [UPDATED] ส่งค่า Active Users จริงกลับไป
         total_active_users=total_active_users, 
         avg_time_per_step=avg_time_map,
         student_performance_avg=round(avg_score, 2)
@@ -89,25 +90,25 @@ def get_all_students(
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
     
-    students = db.query(User).filter(User.role == 'student').all()
+    # [OPTIMIZED] ดึงข้อมูลนักเรียนพร้อมสถิติใน Query เดียว (แก้ปัญหา N+1 Query)
+    # ใช้ Outer Join เพื่อให้ได้นักเรียนที่ยังไม่มีโปรเจคด้วย และ Group By User ID
+    results = db.query(
+        User,
+        func.count(distinct(Project.id)).label("project_count"),
+        func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score)).label("average_score")
+    ).outerjoin(Project, User.id == Project.owner_id)\
+     .outerjoin(EdpStep, Project.id == EdpStep.project_id)\
+     .filter(User.role == 'student')\
+     .group_by(User.id).all()
     
-    results = []
-    for s in students:
-        # นับจำนวนโปรเจค
-        p_count = db.query(Project).filter(Project.owner_id == s.id).count()
+    response_data = []
+    for user, p_count, avg_score in results:
+        s_info = UserInfo.from_orm(user)
+        s_info.project_count = p_count or 0
+        s_info.average_score = round(avg_score or 0.0, 2)
+        response_data.append(s_info)
         
-        # คำนวณคะแนนเฉลี่ยรายบุคคล
-        s_avg = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score)))\
-            .join(Project, Project.id == EdpStep.project_id)\
-            .filter(Project.owner_id == s.id).scalar() or 0.0
-        
-        # แปลงข้อมูล
-        s_info = UserInfo.from_orm(s)
-        s_info.project_count = p_count
-        s_info.average_score = round(s_avg, 2)
-        results.append(s_info)
-        
-    return results
+    return response_data
 
 @router.patch("/teacher/students/{student_id}")
 def update_student(
@@ -151,7 +152,7 @@ def delete_student(
     return {"message": "Student deleted successfully"}
 
 # ==========================================
-# 🚀 PROJECT & EDP ENDPOINTS (เหมือนเดิม 100%)
+# 🚀 PROJECT & EDP ENDPOINTS
 # ==========================================
 
 @router.get("/projects")
@@ -172,18 +173,37 @@ def get_all_projects_for_teacher(
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    projects = db.query(Project).join(User).all()
+    # [OPTIMIZED] ดึงข้อมูลโปรเจกต์พร้อม Step ล่าสุดใน Query เดียว
+    # ใช้ Subquery หา Step ล่าสุดของแต่ละโปรเจกต์
+    latest_step_sub = db.query(
+        EdpStep.project_id,
+        func.max(EdpStep.step_number).label("max_step")
+    ).group_by(EdpStep.project_id).subquery()
+
+    # Join เพื่อเอา Score ของ Step ล่าสุดนั้นมาด้วย
+    # ใช้ coalesce เพื่อจัดการกรณีโปรเจกต์เพิ่งสร้าง (ยังไม่มี Step)
+    projects_query = db.query(
+        Project, 
+        User, 
+        func.coalesce(latest_step_sub.c.max_step, 0).label("latest_step_num"),
+        EdpStep.score.label("latest_step_score"),
+        EdpStep.teacher_score.label("latest_step_teacher_score")
+    ).join(User, Project.owner_id == User.id)\
+     .outerjoin(latest_step_sub, Project.id == latest_step_sub.c.project_id)\
+     .outerjoin(EdpStep, and_(EdpStep.project_id == Project.id, EdpStep.step_number == latest_step_sub.c.max_step))\
+     .all()
     
     results = []
-    for p in projects:
-        last_step = db.query(EdpStep).filter(EdpStep.project_id == p.id).order_by(desc(EdpStep.step_number)).first()
-        
-        current_step_num = last_step.step_number if last_step else 0
+    for p, owner, step_num, score, t_score in projects_query:
+        # คำนวณ Status
         status_text = "In Progress"
+        final_score = t_score if t_score is not None else score
         
-        if current_step_num == 6 and last_step.score >= 60:
+        # Logic การตรวจสอบสถานะ
+        if step_num == 6 and final_score is not None and final_score >= 60:
             status_text = "Completed"
-        elif current_step_num == 0:
+        elif step_num == 0 or step_num is None:
+            step_num = 0
             status_text = "Not Started"
         
         p_data = ProjectWithStudent(
@@ -191,8 +211,8 @@ def get_all_projects_for_teacher(
             title=p.title,
             description=p.description,
             created_at=p.created_at,
-            owner=p.owner,
-            latest_step=current_step_num,
+            owner=owner,
+            latest_step=step_num,
             status=status_text
         )
         results.append(p_data)
