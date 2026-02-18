@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, Layers, Search, CalendarClock, AlertTriangle, Key, Lock } from 'lucide-react';
+import { LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy } from 'lucide-react';
 
 // --- Interfaces ---
 interface Project {
@@ -111,7 +111,6 @@ export default function Dashboard() {
         setShowPasswordModal(false);
         setPassForm({ old: '', new: '', confirm: '' });
     } catch (err) {
-        // [FIXED] แก้ปัญหา ESLint: Unexpected any
         const error = err as { response?: { data?: { detail?: string } }; message?: string };
         alert("เกิดข้อผิดพลาด: " + (error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง"));
     } finally {
@@ -140,7 +139,6 @@ export default function Dashboard() {
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h80v80h-80z' fill='none' stroke='%2338bdf8' stroke-width='0.5'/%3E%3Cpath d='M30 30h40v40h-40z' fill='none' stroke='%2338bdf8' stroke-width='0.5' opacity='0.5'/%3E%3C/svg%3E")`, backgroundSize: '60px 60px' }}></div>
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-soft-light"></div>
-        {/* [FIXED] Updated Tailwind classes to canonical forms */}
         <div className="absolute top-[-20%] left-[-10%] w-200 h-200 bg-cyan-600/10 blur-[150px] rounded-full mix-blend-screen animate-pulse-slow"></div>
         <div className="absolute bottom-[-30%] right-[-10%] w-150 h-150 bg-blue-700/10 blur-[150px] rounded-full mix-blend-screen"></div>
       </div>
@@ -202,12 +200,19 @@ export default function Dashboard() {
               />
             </div>
 
+            {/* [NEW] Quiz Button */}
+            <button
+              onClick={() => navigate('/student/quiz')}
+              className="relative group bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-4 py-2.5 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+            >
+              <Trophy className="w-5 h-5" /> 
+              <span className="hidden sm:inline font-bold">ทำแบบทดสอบ</span>
+            </button>
+
             <button
               onClick={() => setShowCreateModal(true)}
-              // [FIXED] Updated Tailwind classes
               className="relative group bg-linear-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl overflow-hidden shadow-lg shadow-cyan-500/25 transition-all hover:scale-105 active:scale-95"
             >
-              {/* [FIXED] Updated Tailwind classes */}
               <div className="absolute inset-0 bg-white/20 group-hover:animate-[shimmer_1.5s_infinite] -translate-x-full bg-linear-to-r from-transparent via-white/30 to-transparent"></div>
               <div className="flex items-center gap-2 font-medium relative z-10">
                 <Plus className="w-5 h-5" /> <span className="hidden sm:inline">สร้างโครงงานใหม่</span>
@@ -251,11 +256,9 @@ export default function Dashboard() {
               <div 
                 key={project.id}
                 onClick={() => navigate(`/project/${project.id}`)}
-                // [FIXED] Updated Tailwind classes
                 className="group relative glass-tech glass-tech-hover rounded-4xl p-6 cursor-pointer transition-all duration-500 overflow-hidden"
               >
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  {/* [FIXED] Updated Tailwind classes */}
                   <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-4xl blur-md"></div>
                 </div>
 
@@ -278,7 +281,6 @@ export default function Dashboard() {
                     {project.title}
                   </h3>
                   <div className="relative">
-                    {/* [FIXED] Updated Tailwind classes */}
                     <div className="absolute -left-3 top-2 bottom-2 w-0.5 bg-slate-800 group-hover:bg-cyan-700/50 transition-colors"></div>
                     <p className="text-slate-400 text-sm leading-relaxed line-clamp-2 pl-2 font-light">
                         {project.description || "ไม่มีรายละเอียดสังเขป"}
@@ -303,10 +305,8 @@ export default function Dashboard() {
             {filteredProjects.length === 0 && (
               <div
                 onClick={() => setShowCreateModal(true)}
-                // [FIXED] Updated Tailwind classes
                 className="group col-span-full h-75 glass-tech rounded-4xl border-dashed border-2 border-slate-800/80 hover:border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden"
               >
-                {/* [FIXED] Updated Tailwind classes */}
                 <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-4xl"></div>
                  <div className="w-24 h-24 bg-slate-900/80 rounded-full flex items-center justify-center mb-6 border border-slate-800 group-hover:border-cyan-500/50 group-hover:scale-110 transition-all relative z-10">
                    <Plus className="w-10 h-10 text-slate-600 group-hover:text-cyan-400" />
@@ -325,7 +325,6 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-[#020617]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setShowCreateModal(false)}></div>
           
           <div className="relative glass-tech bg-[#0F172A]/90 rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden">
-            {/* [FIXED] Updated Tailwind classes */}
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-600"></div>
             
             <div className="flex justify-between items-center mb-8 relative z-10">
@@ -371,7 +370,6 @@ export default function Dashboard() {
                 <button 
                   type="submit"
                   disabled={createLoading}
-                  // [FIXED] Updated Tailwind classes
                   className="flex-[1.5] py-3.5 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-medium shadow-lg shadow-cyan-500/20 transition-all flex justify-center items-center gap-2 relative overflow-hidden hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {createLoading ? <Loader2 className="animate-spin w-5 h-5" /> : (
@@ -386,13 +384,10 @@ export default function Dashboard() {
 
       {/* --- Delete Confirmation Modal --- */}
       {showDeleteModal && (
-        // [FIXED] Updated Tailwind classes
         <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowDeleteModal(false)}></div>
           
-          {/* [FIXED] Updated Tailwind classes */}
           <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-sm p-8 shadow-2xl animate-modal-pop border-red-500/20 overflow-hidden text-center">
-            {/* [FIXED] Updated Tailwind classes */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-linear-to-r from-transparent via-red-500 to-transparent"></div>
             <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-64 bg-red-500/10 blur-[80px] rounded-full pointer-events-none"></div>
 
@@ -422,7 +417,6 @@ export default function Dashboard() {
               <button 
                 onClick={confirmDeleteProject}
                 disabled={isDeleting}
-                // [FIXED] Updated Tailwind classes
                 className="flex-1 py-3 text-white bg-linear-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 rounded-xl font-medium shadow-lg shadow-red-500/20 transition-all flex justify-center items-center gap-2 hover:scale-[1.02]"
               >
                  {isDeleting ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันลบ'}
@@ -434,13 +428,10 @@ export default function Dashboard() {
 
       {/* --- Change Password Modal --- */}
       {showPasswordModal && (
-        // [FIXED] Updated Tailwind classes
         <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowPasswordModal(false)}></div>
           
-          {/* [FIXED] Updated Tailwind classes */}
           <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-md p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden">
-            {/* [FIXED] Updated Tailwind classes */}
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-500"></div>
             
             <div className="flex justify-between items-center mb-6">
@@ -488,7 +479,6 @@ export default function Dashboard() {
                 <button 
                     type="submit"
                     disabled={passLoading}
-                    // [FIXED] Updated Tailwind classes
                     className="w-full py-3.5 mt-4 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-medium shadow-lg shadow-cyan-500/20 transition-all flex justify-center items-center gap-2"
                 >
                     {passLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันการเปลี่ยนรหัสผ่าน'}
