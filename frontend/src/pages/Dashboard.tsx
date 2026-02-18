@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy } from 'lucide-react';
+import { 
+  LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
+  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, CheckCircle, XCircle 
+} from 'lucide-react';
 
 // --- Interfaces ---
 interface Project {
@@ -9,6 +12,15 @@ interface Project {
   title: string;
   description: string;
   created_at?: string;
+}
+
+interface QuizAttempt {
+  id: number;
+  score: number;
+  total_score: number;
+  passed: boolean;
+  time_spent_seconds: number;
+  created_at: string;
 }
 
 export default function Dashboard() {
@@ -33,6 +45,11 @@ export default function Dashboard() {
   const [passForm, setPassForm] = useState({ old: '', new: '', confirm: '' });
   const [passLoading, setPassLoading] = useState(false);
 
+  // Quiz History Modal State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
     fetchProjects();
   }, []);
@@ -43,6 +60,21 @@ export default function Dashboard() {
       setProjects(res.data);
     } catch (err) {
       console.error("Failed to fetch projects", err);
+    }
+  };
+
+  // Fetch Quiz History
+  const fetchQuizHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await client.get('/quiz/history');
+      setQuizHistory(res.data);
+      setShowHistoryModal(true);
+    } catch (err) {
+      console.error("Failed to fetch history", err);
+      alert("ไม่สามารถดึงข้อมูลประวัติการสอบได้");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -111,8 +143,10 @@ export default function Dashboard() {
         setShowPasswordModal(false);
         setPassForm({ old: '', new: '', confirm: '' });
     } catch (err) {
-        const error = err as { response?: { data?: { detail?: string } }; message?: string };
-        alert("เกิดข้อผิดพลาด: " + (error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง"));
+        // [FIXED] Type Assertion แทน any
+        const error = err as { response?: { data?: { detail?: string } } };
+        const errorMsg = error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง";
+        alert("เกิดข้อผิดพลาด: " + errorMsg);
     } finally {
         setPassLoading(false);
     }
@@ -130,6 +164,12 @@ export default function Dashboard() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')} นาที`;
   };
 
   return (
@@ -160,6 +200,21 @@ export default function Dashboard() {
           box-shadow: 0 0 20px rgba(56, 189, 248, 0.15), inset 0 0 10px rgba(56, 189, 248, 0.05);
         }
         
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
         @keyframes modalPop {
             0% { transform: scale(0.95); opacity: 0; }
             100% { transform: scale(1); opacity: 1; }
@@ -200,7 +255,17 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* [NEW] Quiz Button */}
+            {/* History Button */}
+            <button
+              onClick={fetchQuizHistory}
+              disabled={historyLoading}
+              className="p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/10 transition-all"
+              title="ประวัติการสอบ"
+            >
+              {historyLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+            </button>
+
+            {/* Quiz Button */}
             <button
               onClick={() => navigate('/student/quiz')}
               className="relative group bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-4 py-2.5 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
@@ -484,6 +549,60 @@ export default function Dashboard() {
                     {passLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันการเปลี่ยนรหัสผ่าน'}
                 </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- [NEW] Quiz History Modal --- */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowHistoryModal(false)}></div>
+          
+          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-2xl p-8 shadow-2xl animate-modal-pop border-indigo-500/20 overflow-hidden flex flex-col max-h-[80vh]">
+            <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
+            
+            <div className="flex justify-between items-center mb-6 shrink-0">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบ
+                </h3>
+                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400"/></button>
+            </div>
+
+            <div className="overflow-y-auto pr-2 space-y-3 custom-scrollbar flex-1">
+              {quizHistory.length === 0 ? (
+                <div className="text-center py-10 text-slate-500">
+                  <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>ยังไม่มีประวัติการสอบ</p>
+                </div>
+              ) : (
+                quizHistory.map((attempt, index) => (
+                  <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 rounded-2xl p-4 flex items-center justify-between hover:border-indigo-500/30 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
+                        ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}
+                      `}>
+                        {quizHistory.length - index}
+                      </div>
+                      <div>
+                        <div className="text-white font-bold text-lg flex items-center gap-2">
+                          {attempt.score} <span className="text-sm text-slate-500 font-normal">/ {attempt.total_score} คะแนน</span>
+                        </div>
+                        <div className="text-xs text-slate-500 flex items-center gap-3 mt-1">
+                          <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {formatDate(attempt.created_at)}</span>
+                          <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {formatTime(attempt.time_spent_seconds)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1
+                      ${attempt.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
+                    `}>
+                      {attempt.passed ? <><CheckCircle className="w-3 h-3"/> ผ่านเกณฑ์</> : <><XCircle className="w-3 h-3"/> ไม่ผ่าน</>}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
