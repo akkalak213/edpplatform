@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
-  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, CheckCircle, XCircle, Medal, Crown 
+  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, Medal, Crown 
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -23,7 +23,6 @@ interface QuizAttempt {
   created_at: string;
 }
 
-// [NEW] Interface สำหรับ Leaderboard
 interface LeaderboardItem {
   student_name: string;
   class_room: string;
@@ -38,36 +37,32 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Create Modal State
+  // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
 
-  // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(''); 
 
-  // Change Password State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passForm, setPassForm] = useState({ old: '', new: '', confirm: '' });
   const [passLoading, setPassLoading] = useState(false);
 
-  // Quiz History Modal State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  // [NEW] Leaderboard Modal State
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   useEffect(() => {
     fetchProjects();
-    fetchLeaderboard(); // เรียกข้อมูลจัดอันดับทันทีที่เข้าหน้าเว็บ
+    fetchLeaderboard();
   }, []);
 
   const fetchProjects = async () => {
@@ -93,13 +88,11 @@ export default function Dashboard() {
     }
   };
 
-  // [NEW] Fetch Leaderboard
   const fetchLeaderboard = async () => {
     setLeaderboardLoading(true);
     try {
       const res = await client.get('/quiz/leaderboard');
       setLeaderboardData(res.data);
-      // เด้ง Modal ทันทีที่โหลดเสร็จ (ถ้ามีข้อมูล)
       if (res.data.length > 0) {
         setShowLeaderboard(true);
       }
@@ -115,7 +108,6 @@ export default function Dashboard() {
     navigate('/login');
   };
 
-  // --- Create Logic ---
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateLoading(true);
@@ -132,7 +124,6 @@ export default function Dashboard() {
     }
   };
 
-  // --- Delete Logic ---
   const clickDeleteProject = (e: React.MouseEvent, projectId: number) => {
     e.stopPropagation(); 
     setProjectToDelete(projectId);
@@ -156,15 +147,12 @@ export default function Dashboard() {
     }
   };
 
-  // --- Change Password Logic ---
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (passForm.new !== passForm.confirm) {
         alert("รหัสผ่านใหม่ไม่ตรงกัน");
         return;
     }
-
     setPassLoading(true);
     try {
         await client.post('/auth/change-password', {
@@ -204,195 +192,180 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-300 relative overflow-hidden selection:bg-cyan-500/20 selection:text-cyan-200">
+    <div className="min-h-screen bg-[#020617] text-slate-300 relative overflow-x-hidden selection:bg-cyan-500/20 selection:text-cyan-200">
       
       {/* --- Ambient Background --- */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h80v80h-80z' fill='none' stroke='%2338bdf8' stroke-width='0.5'/%3E%3Cpath d='M30 30h40v40h-40z' fill='none' stroke='%2338bdf8' stroke-width='0.5' opacity='0.5'/%3E%3C/svg%3E")`, backgroundSize: '60px 60px' }}></div>
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-[0.15] mix-blend-soft-light"></div>
-        <div className="absolute top-[-20%] left-[-10%] w-200 h-200 bg-cyan-600/10 blur-[150px] rounded-full mix-blend-screen animate-pulse-slow"></div>
-        <div className="absolute bottom-[-30%] right-[-10%] w-150 h-150 bg-blue-700/10 blur-[150px] rounded-full mix-blend-screen"></div>
+        <div className="absolute top-[-20%] left-[-10%] w-[150%] md:w-[200px] h-[150%] md:h-[200px] bg-cyan-600/10 blur-[100px] md:blur-[150px] rounded-full mix-blend-screen animate-pulse-slow"></div>
       </div>
 
-      {/* --- Custom Styles --- */}
       <style>{`
         .animate-pulse-slow { animation: pulse 8s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        
-        .glass-tech {
-          background: rgba(2, 6, 23, 0.6);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(56, 189, 248, 0.1);
-          box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-        }
-        .glass-tech-hover:hover {
-          background: rgba(2, 6, 23, 0.8);
-          border-color: rgba(56, 189, 248, 0.3);
-          box-shadow: 0 0 20px rgba(56, 189, 248, 0.15), inset 0 0 10px rgba(56, 189, 248, 0.05);
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.1);
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-
-        @keyframes modalPop {
-            0% { transform: scale(0.95); opacity: 0; }
-            100% { transform: scale(1); opacity: 1; }
-        }
+        .glass-tech { background: rgba(2, 6, 23, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid rgba(56, 189, 248, 0.1); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1); }
+        .glass-tech-hover:hover { background: rgba(2, 6, 23, 0.8); border-color: rgba(56, 189, 248, 0.3); box-shadow: 0 0 20px rgba(56, 189, 248, 0.15), inset 0 0 10px rgba(56, 189, 248, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        @keyframes modalPop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
         .animate-modal-pop { animation: modalPop 0.2s ease-out forwards; }
       `}</style>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 md:py-8">
         
         {/* --- Header Deck --- */}
-        <header className="mb-12 glass-tech rounded-3xl p-4 md:p-6 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4 self-start md:self-auto">
-            <div className="relative w-12 h-12 flex items-center justify-center">
-              <div className="absolute inset-0 bg-cyan-500/20 rounded-xl blur-md animate-pulse"></div>
-              <div className="relative bg-[#0F172A] border border-cyan-500/50 rounded-xl p-2.5">
-                <Cpu className="w-6 h-6 text-cyan-400" />
+        <header className="mb-8 md:mb-12 glass-tech rounded-2xl md:rounded-3xl p-4 flex flex-col gap-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Logo Section */}
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <div className="relative w-10 h-10 md:w-12 md:h-12 flex items-center justify-center shrink-0">
+                <div className="absolute inset-0 bg-cyan-500/20 rounded-xl blur-md animate-pulse"></div>
+                <div className="relative bg-[#0F172A] border border-cyan-500/50 rounded-xl p-2 md:p-2.5">
+                  <Cpu className="w-5 h-5 md:w-6 md:h-6 text-cyan-400" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-white tracking-wide">EDP <span className="text-cyan-400">NEXUS</span></h1>
+                <div className="flex items-center gap-2 text-[10px] md:text-xs text-cyan-600/70 font-medium">
+                  <Activity className="w-3 h-3" /> ระบบพร้อมใช้งาน v2.5.0
+                </div>
               </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-wide">EDP <span className="text-cyan-400">NEXUS</span></h1>
-              <div className="flex items-center gap-2 text-xs text-cyan-600/70 font-medium">
-                <Activity className="w-3 h-3" /> ระบบพร้อมใช้งาน v2.5.0
+
+            {/* Action Buttons Section */}
+            <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3 w-full sm:w-auto">
+              {/* Search (Desktop only inline, mobile hidden or can be added as a button) */}
+              <div className="relative group hidden lg:block">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="ค้นหาโครงงาน..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-[#0F172A]/50 border border-slate-700/50 text-slate-300 text-sm rounded-xl pl-10 pr-4 py-2 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all w-40 focus:w-56"
+                />
               </div>
+
+              <button
+                onClick={fetchQuizHistory}
+                disabled={historyLoading}
+                className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all shrink-0"
+                title="ประวัติการสอบ"
+              >
+                {historyLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+              </button>
+
+              <button
+                onClick={() => navigate('/student/quiz')}
+                className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-3 md:px-4 py-2 md:py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 text-sm font-bold"
+              >
+                <Trophy className="w-4 h-4 md:w-5 md:h-5" /> 
+                <span className="hidden sm:inline">ทำแบบทดสอบ</span>
+              </button>
+
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-linear-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl shadow-lg shadow-cyan-500/25 transition-all flex items-center gap-2 shrink-0 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4 md:w-5 md:h-5" /> <span className="hidden sm:inline">สร้างโครงงานใหม่</span>
+              </button>
+
+              <button 
+                onClick={() => setShowPasswordModal(true)}
+                className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all shrink-0"
+                title="เปลี่ยนรหัสผ่าน"
+              >
+                <Key className="w-5 h-5" />
+              </button>
+
+              <button 
+                onClick={handleLogout}
+                className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                title="ออกจากระบบ"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-            <div className="relative group hidden md:block">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
-              </div>
-              <input
-                type="text"
-                placeholder="ค้นหาโครงงาน..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-[#0F172A]/50 border border-slate-700/50 text-slate-300 text-sm rounded-xl pl-10 pr-4 py-2.5 focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none transition-all w-48 focus:w-64"
-              />
+          {/* Search (Mobile Only) */}
+          <div className="relative group lg:hidden w-full">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-slate-500" />
             </div>
-
-            {/* History Button */}
-            <button
-              onClick={fetchQuizHistory}
-              disabled={historyLoading}
-              className="p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/10 transition-all"
-              title="ประวัติการสอบ"
-            >
-              {historyLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
-            </button>
-
-            {/* Quiz Button */}
-            <button
-              onClick={() => navigate('/student/quiz')}
-              className="relative group bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-4 py-2.5 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
-            >
-              <Trophy className="w-5 h-5" /> 
-              <span className="hidden sm:inline font-bold">ทำแบบทดสอบ</span>
-            </button>
-
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="relative group bg-linear-to-br from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white px-5 py-2.5 rounded-xl overflow-hidden shadow-lg shadow-cyan-500/25 transition-all hover:scale-105 active:scale-95"
-            >
-              <div className="absolute inset-0 bg-white/20 group-hover:animate-[shimmer_1.5s_infinite] -translate-x-full bg-linear-to-r from-transparent via-white/30 to-transparent"></div>
-              <div className="flex items-center gap-2 font-medium relative z-10">
-                <Plus className="w-5 h-5" /> <span className="hidden sm:inline">สร้างโครงงานใหม่</span>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => setShowPasswordModal(true)}
-              className="p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/10 transition-all"
-              title="เปลี่ยนรหัสผ่าน"
-            >
-              <Key className="w-5 h-5" />
-            </button>
-
-            <button 
-              onClick={handleLogout}
-              className="p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
-              title="ออกจากระบบ"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            <input
+              type="text"
+              placeholder="ค้นหาโครงงาน..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-[#0F172A]/50 border border-slate-700/50 text-slate-300 text-sm rounded-xl pl-10 pr-4 py-2.5 outline-none"
+            />
           </div>
         </header>
 
         {/* --- Project Grid --- */}
         <main className="pb-20">
-          <div className="flex items-end justify-between mb-8 px-2">
+          <div className="flex items-center justify-between mb-6 md:mb-8 px-2">
             <div>
-              <h2 className="text-xl font-semibold text-white mb-1 flex items-center gap-2">
+              <h2 className="text-lg md:text-xl font-semibold text-white flex items-center gap-2">
                 <Layers className="w-5 h-5 text-cyan-500" /> โครงงานทั้งหมด
               </h2>
-              <p className="text-slate-500 text-sm font-light">เลือกโครงงานเพื่อเข้าสู่พื้นที่การทำงาน</p>
+              <p className="text-slate-500 text-xs md:text-sm font-light">เลือกโครงงานเพื่อเข้าสู่พื้นที่การทำงาน</p>
             </div>
-            <div className="text-xs text-slate-600 font-medium">
+            <div className="text-[10px] md:text-xs text-slate-600 font-medium">
               จำนวน: <span className="text-cyan-400">{filteredProjects.length}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
             {filteredProjects.map((project) => (
               <div 
                 key={project.id}
                 onClick={() => navigate(`/project/${project.id}`)}
-                className="group relative glass-tech glass-tech-hover rounded-4xl p-6 cursor-pointer transition-all duration-500 overflow-hidden"
+                className="group relative glass-tech glass-tech-hover rounded-3xl md:rounded-4xl p-5 md:p-6 cursor-pointer transition-all duration-500 overflow-hidden"
               >
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-4xl blur-md"></div>
+                  <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl md:rounded-4xl blur-md"></div>
                 </div>
 
-                <div className="flex justify-between items-start mb-5 relative z-10">
-                  <div className="text-[10px] text-cyan-300/70 bg-cyan-950/30 border border-cyan-900/50 px-3 py-1 rounded-full uppercase tracking-wider font-medium">
+                <div className="flex justify-between items-start mb-4 md:mb-5 relative z-10">
+                  <div className="text-[9px] md:text-[10px] text-cyan-300/70 bg-cyan-950/30 border border-cyan-900/50 px-2 md:px-3 py-1 rounded-full uppercase tracking-wider font-medium">
                     รหัส :: {String(project.id).padStart(4, '0')}
                   </div>
                   
                   <button 
                     onClick={(e) => clickDeleteProject(e, project.id)}
-                    className="p-2 text-slate-600 hover:text-red-400 bg-slate-900/50 hover:bg-red-950/30 rounded-xl border border-transparent hover:border-red-900/50 transition-all opacity-60 group-hover:opacity-100 z-20"
+                    className="p-1.5 md:p-2 text-slate-600 hover:text-red-400 bg-slate-900/50 hover:bg-red-950/30 rounded-lg md:rounded-xl border border-transparent hover:border-red-900/50 transition-all opacity-100 sm:opacity-60 sm:group-hover:opacity-100 z-20"
                     title="ลบโครงงาน"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   </button>
                 </div>
 
-                <div className="relative z-10 pl-2">
-                  <h3 className="text-2xl font-bold text-white mb-3 truncate group-hover:text-cyan-300 transition-colors">
+                <div className="relative z-10 pl-1 md:pl-2">
+                  <h3 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3 truncate group-hover:text-cyan-300 transition-colors">
                     {project.title}
                   </h3>
                   <div className="relative">
-                    <div className="absolute -left-3 top-2 bottom-2 w-0.5 bg-slate-800 group-hover:bg-cyan-700/50 transition-colors"></div>
-                    <p className="text-slate-400 text-sm leading-relaxed line-clamp-2 pl-2 font-light">
+                    <div className="absolute -left-3 top-1 bottom-1 w-0.5 bg-slate-800 group-hover:bg-cyan-700/50 transition-colors"></div>
+                    <p className="text-slate-400 text-xs md:text-sm leading-relaxed line-clamp-2 pl-2 font-light">
                         {project.description || "ไม่มีรายละเอียดสังเขป"}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-8 pt-4 border-t border-slate-800/50 flex items-center justify-between relative z-10">
+                <div className="mt-6 md:mt-8 pt-4 border-t border-slate-800/50 flex items-center justify-between relative z-10">
                   <div className="flex items-center gap-2">
-                      <CalendarClock className="w-4 h-4 text-slate-500 group-hover:text-cyan-500 transition-colors" />
-                      <span className="text-[10px] text-slate-500 font-medium">
-                        สร้างเมื่อ: {formatDate(project.created_at)}
+                      <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-500 group-hover:text-cyan-500 transition-colors" />
+                      <span className="text-[9px] md:text-[10px] text-slate-500 font-medium">
+                        {formatDate(project.created_at)}
                       </span>
                   </div>
-                  <div className="text-cyan-500 opacity-0 -translate-x-4 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 flex items-center gap-1 text-xs font-medium tracking-wider">
-                    เปิดงาน <CornerDownRight className="w-4 h-4" />
+                  <div className="text-cyan-500 opacity-100 sm:opacity-0 sm:-translate-x-4 sm:group-hover:opacity-100 sm:group-hover:translate-x-0 transition-all duration-300 flex items-center gap-1 text-[10px] md:text-xs font-medium tracking-wider">
+                    เปิด <CornerDownRight className="w-3 h-3 md:w-4 md:h-4" />
                   </div>
                 </div>
               </div>
@@ -401,14 +374,14 @@ export default function Dashboard() {
             {filteredProjects.length === 0 && (
               <div
                 onClick={() => setShowCreateModal(true)}
-                className="group col-span-full h-75 glass-tech rounded-4xl border-dashed border-2 border-slate-800/80 hover:border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden"
+                className="group col-span-full h-48 md:h-75 glass-tech rounded-3xl md:rounded-4xl border-dashed border-2 border-slate-800/80 hover:border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden"
               >
-                <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-4xl"></div>
-                 <div className="w-24 h-24 bg-slate-900/80 rounded-full flex items-center justify-center mb-6 border border-slate-800 group-hover:border-cyan-500/50 group-hover:scale-110 transition-all relative z-10">
-                   <Plus className="w-10 h-10 text-slate-600 group-hover:text-cyan-400" />
+                <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                 <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-900/80 rounded-full flex items-center justify-center mb-4 md:mb-6 border border-slate-800 group-hover:border-cyan-500/50 transition-all relative z-10">
+                   <Plus className="w-8 h-8 md:w-10 md:h-10 text-slate-600 group-hover:text-cyan-400" />
                  </div>
-                 <h3 className="text-xl font-bold text-slate-300 group-hover:text-white relative z-10">พื้นที่ว่าง</h3>
-                 <p className="text-slate-500 text-sm mt-2 relative z-10 font-light">คลิกเพื่อเริ่มต้นสร้างโครงงานใหม่</p>
+                 <h3 className="text-lg md:text-xl font-bold text-slate-300 group-hover:text-white relative z-10">พื้นที่ว่าง</h3>
+                 <p className="text-slate-500 text-xs md:text-sm mt-2 relative z-10 font-light px-4 text-center">คลิกเพื่อเริ่มต้นสร้างโครงงานใหม่</p>
               </div>
             )}
           </div>
@@ -417,60 +390,56 @@ export default function Dashboard() {
 
       {/* --- Create Project Modal --- */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#020617]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setShowCreateModal(false)}></div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-[#020617]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setShowCreateModal(false)}></div>
           
-          <div className="relative glass-tech bg-[#0F172A]/90 rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden">
+          <div className="relative glass-tech bg-[#0F172A]/90 rounded-[2rem] w-full max-w-lg p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden my-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-600"></div>
             
-            <div className="flex justify-between items-center mb-8 relative z-10">
+            <div className="flex justify-between items-start mb-6 md:mb-8 relative z-10">
               <div>
-                <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-                    <Cpu className="w-6 h-6 text-cyan-400" />
+                <h3 className="text-xl md:text-2xl font-bold text-white flex items-center gap-3">
+                    <Cpu className="w-5 h-5 md:w-6 md:h-6 text-cyan-400" />
                     สร้างโครงงานใหม่
                 </h3>
-                <p className="text-slate-400 text-sm mt-1 font-light">กำหนดหัวข้อและรายละเอียดสำหรับโครงงานวิศวกรรมของคุณ</p>
+                <p className="text-slate-400 text-xs md:text-sm mt-1 font-light">ระบุรายละเอียดสำหรับโครงงานวิศวกรรมของคุณ</p>
               </div>
-              <button onClick={() => setShowCreateModal(false)} className="p-2 bg-slate-900/50 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors border border-slate-800">
-                <X className="w-5 h-5" />
+              <button onClick={() => setShowCreateModal(false)} className="p-2 bg-slate-900/50 rounded-full text-slate-400 hover:text-white border border-slate-800 shrink-0">
+                <X className="w-4 h-4 md:w-5 md:h-5" />
               </button>
             </div>
             
-            <form onSubmit={handleCreateProject} className="space-y-6 relative z-10">
-              <div className="group">
-                <label className="block text-xs text-cyan-300/70 mb-2 font-medium ml-1">ชื่อโครงงาน</label>
+            <form onSubmit={handleCreateProject} className="space-y-4 md:space-y-6 relative z-10">
+              <div>
+                <label className="block text-[10px] md:text-xs text-cyan-300/70 mb-2 font-medium ml-1">ชื่อโครงงาน</label>
                 <input 
-                  type="text" 
-                  required
-                  className="w-full px-5 py-3.5 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all"
+                  type="text" required
+                  className="w-full px-4 md:px-5 py-3 md:py-3.5 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none transition-all focus:ring-2 focus:ring-cyan-500/20"
                   placeholder="เช่น หุ่นยนต์เก็บขยะอัตโนมัติ"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
-              <div className="group">
-                <label className="block text-xs text-cyan-300/70 mb-2 font-medium ml-1">รายละเอียดสังเขป</label>
+              <div>
+                <label className="block text-[10px] md:text-xs text-cyan-300/70 mb-2 font-medium ml-1">รายละเอียดสังเขป</label>
                 <textarea 
-                  rows={4}
-                  className="w-full px-5 py-3.5 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all resize-none"
-                  placeholder="อธิบายเป้าหมายหรือขอบเขตของโครงงาน..."
+                  rows={3}
+                  className="w-full px-4 md:px-5 py-3 md:py-3.5 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none transition-all focus:ring-2 focus:ring-cyan-500/20 resize-none"
+                  placeholder="อธิบายเป้าหมายของโครงงาน..."
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
                 />
               </div>
               
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-3.5 text-slate-400 bg-slate-900/50 border border-slate-800 hover:bg-slate-800/80 rounded-xl font-medium transition-all">
+              <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
+                <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 py-3 text-slate-400 bg-slate-900/50 border border-slate-800 rounded-xl font-medium text-sm">
                   ยกเลิก
                 </button>
                 <button 
-                  type="submit"
-                  disabled={createLoading}
-                  className="flex-[1.5] py-3.5 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-medium shadow-lg shadow-cyan-500/20 transition-all flex justify-center items-center gap-2 relative overflow-hidden hover:scale-[1.02] active:scale-[0.98]"
+                  type="submit" disabled={createLoading}
+                  className="flex-[1.5] py-3 text-white bg-linear-to-r from-cyan-600 to-blue-600 rounded-xl font-medium text-sm shadow-lg shadow-cyan-500/20 flex justify-center items-center gap-2"
                 >
-                  {createLoading ? <Loader2 className="animate-spin w-5 h-5" /> : (
-                    <><Activity className="w-5 h-5" /> ยืนยันการสร้าง</>
-                  )}
+                  {createLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันการสร้าง'}
                 </button>
               </div>
             </form>
@@ -480,42 +449,20 @@ export default function Dashboard() {
 
       {/* --- Delete Confirmation Modal --- */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowDeleteModal(false)}></div>
-          
-          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-sm p-8 shadow-2xl animate-modal-pop border-red-500/20 overflow-hidden text-center">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-linear-to-r from-transparent via-red-500 to-transparent"></div>
-            <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-64 bg-red-500/10 blur-[80px] rounded-full pointer-events-none"></div>
-
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20 relative z-10 shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-               <AlertTriangle className="w-10 h-10 text-red-500" />
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowDeleteModal(false)}></div>
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-sm p-6 md:p-8 text-center animate-modal-pop border-red-500/20">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-red-500"></div>
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
-
-            <h3 className="text-2xl font-bold text-white mb-3 relative z-10">ยืนยันการลบข้อมูล</h3>
-            <p className="text-slate-400 text-sm mb-6 font-light relative z-10 leading-relaxed">
-              คุณแน่ใจหรือไม่ที่จะลบโครงงานนี้?<br/>
-              <span className="text-red-400/80 font-medium">ข้อมูลทั้งหมดจะหายไปและกู้คืนไม่ได้</span>
-            </p>
-            
-            {deleteError && (
-              <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-300 text-xs flex items-center justify-center gap-2 animate-pulse">
-                <X className="w-3 h-3" /> {deleteError}
-              </div>
-            )}
-
-            <div className="flex gap-3 relative z-10">
-              <button 
-                onClick={() => setShowDeleteModal(false)} 
-                className="flex-1 py-3 text-slate-400 bg-slate-900 hover:bg-slate-800 rounded-xl font-medium transition-all border border-slate-800"
-              >
-                ยกเลิก
-              </button>
-              <button 
-                onClick={confirmDeleteProject}
-                disabled={isDeleting}
-                className="flex-1 py-3 text-white bg-linear-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 rounded-xl font-medium shadow-lg shadow-red-500/20 transition-all flex justify-center items-center gap-2 hover:scale-[1.02]"
-              >
-                 {isDeleting ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันลบ'}
+            <h3 className="text-xl font-bold text-white mb-2">ยืนยันการลบข้อมูล</h3>
+            <p className="text-slate-400 text-xs md:text-sm mb-6 leading-relaxed px-2">ข้อมูลทั้งหมดจะหายไปและกู้คืนไม่ได้</p>
+            {deleteError && <div className="mb-4 text-red-400 text-xs animate-pulse">{deleteError}</div>}
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-2.5 text-slate-400 bg-slate-900 border border-slate-800 rounded-xl text-sm font-medium">ยกเลิก</button>
+              <button onClick={confirmDeleteProject} disabled={isDeleting} className="flex-1 py-2.5 text-white bg-red-600 rounded-xl text-sm font-bold shadow-lg shadow-red-500/20">
+                 {isDeleting ? <Loader2 className="animate-spin w-4 h-4 mx-auto" /> : 'ยืนยันลบ'}
               </button>
             </div>
           </div>
@@ -524,59 +471,32 @@ export default function Dashboard() {
 
       {/* --- Change Password Modal --- */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowPasswordModal(false)}></div>
-          
-          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-md p-8 shadow-2xl animate-modal-pop border-cyan-500/20 overflow-hidden">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowPasswordModal(false)}></div>
+          <div className="relative glass-tech bg-[#0F172A] rounded-[2rem] w-full max-w-md p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 my-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-500"></div>
-            
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                     <Lock className="w-5 h-5 text-cyan-400" /> เปลี่ยนรหัสผ่าน
                 </h3>
-                <button onClick={() => setShowPasswordModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400"/></button>
+                <button onClick={() => setShowPasswordModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5"/></button>
             </div>
-
             <form onSubmit={handleChangePassword} className="space-y-4">
-                <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-medium ml-1">รหัสผ่านเดิม</label>
+                {['old', 'new', 'confirm'].map((key) => (
+                  <div key={key}>
+                    <label className="text-[10px] text-slate-400 font-medium ml-1">
+                      {key === 'old' ? 'รหัสผ่านเดิม' : key === 'new' ? 'รหัสผ่านใหม่' : 'ยืนยันรหัสผ่านใหม่'}
+                    </label>
                     <input 
-                        type="password"
-                        required
-                        value={passForm.old}
-                        onChange={(e) => setPassForm({...passForm, old: e.target.value})}
-                        className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all"
-                        placeholder="••••••"
+                      type="password" required
+                      value={passForm[key as keyof typeof passForm]}
+                      onChange={(e) => setPassForm({...passForm, [key]: e.target.value})}
+                      className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20"
+                      placeholder="••••••"
                     />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-medium ml-1">รหัสผ่านใหม่</label>
-                    <input 
-                        type="password"
-                        required
-                        value={passForm.new}
-                        onChange={(e) => setPassForm({...passForm, new: e.target.value})}
-                        className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all"
-                        placeholder="••••••"
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs text-slate-400 font-medium ml-1">ยืนยันรหัสผ่านใหม่</label>
-                    <input 
-                        type="password"
-                        required
-                        value={passForm.confirm}
-                        onChange={(e) => setPassForm({...passForm, confirm: e.target.value})}
-                        className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 outline-none transition-all"
-                        placeholder="••••••"
-                    />
-                </div>
-
-                <button 
-                    type="submit"
-                    disabled={passLoading}
-                    className="w-full py-3.5 mt-4 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-medium shadow-lg shadow-cyan-500/20 transition-all flex justify-center items-center gap-2"
-                >
+                  </div>
+                ))}
+                <button type="submit" disabled={passLoading} className="w-full py-3.5 mt-4 text-white bg-linear-to-r from-cyan-600 to-blue-600 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 text-sm">
                     {passLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันการเปลี่ยนรหัสผ่าน'}
                 </button>
             </form>
@@ -584,51 +504,47 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- [NEW] Quiz History Modal --- */}
+      {/* --- Quiz History Modal --- */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowHistoryModal(false)}></div>
-          
-          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-2xl p-8 shadow-2xl animate-modal-pop border-indigo-500/20 overflow-hidden flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistoryModal(false)}></div>
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-2xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
-            
             <div className="flex justify-between items-center mb-6 shrink-0">
-                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
                     <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบ
                 </h3>
-                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400"/></button>
+                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5"/></button>
             </div>
-
-            <div className="overflow-y-auto pr-2 space-y-3 custom-scrollbar flex-1">
+            <div className="overflow-y-auto pr-1 space-y-3 custom-scrollbar flex-1">
               {quizHistory.length === 0 ? (
                 <div className="text-center py-10 text-slate-500">
-                  <Trophy className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>ยังไม่มีประวัติการสอบ</p>
+                  <Trophy className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">ยังไม่มีประวัติการสอบ</p>
                 </div>
               ) : (
                 quizHistory.map((attempt, index) => (
-                  <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 rounded-2xl p-4 flex items-center justify-between hover:border-indigo-500/30 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold
+                  <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 rounded-2xl p-4 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold shrink-0
                         ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}
                       `}>
                         {quizHistory.length - index}
                       </div>
-                      <div>
-                        <div className="text-white font-bold text-lg flex items-center gap-2">
-                          {attempt.score} <span className="text-sm text-slate-500 font-normal">/ {attempt.total_score} คะแนน</span>
+                      <div className="min-w-0">
+                        <div className="text-white font-bold text-sm md:text-lg flex items-center gap-2 truncate">
+                          {attempt.score} <span className="text-[10px] md:text-sm text-slate-500 font-normal">/ {attempt.total_score}</span>
                         </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-3 mt-1">
+                        <div className="text-[9px] md:text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-1">
                           <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {formatDate(attempt.created_at)}</span>
                           <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {formatTime(attempt.time_spent_seconds)}</span>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1
+                    <div className={`px-2 md:px-3 py-1 rounded-lg text-[9px] md:text-xs font-bold shrink-0
                       ${attempt.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
                     `}>
-                      {attempt.passed ? <><CheckCircle className="w-3 h-3"/> ผ่านเกณฑ์</> : <><XCircle className="w-3 h-3"/> ไม่ผ่าน</>}
+                      {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
                     </div>
                   </div>
                 ))
@@ -638,75 +554,76 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- [NEW] Leaderboard Modal --- */}
+      {/* --- Leaderboard Modal --- */}
       {showLeaderboard && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowLeaderboard(false)}></div>
-          
-          <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-3xl p-8 shadow-2xl animate-modal-pop border-amber-500/20 overflow-hidden flex flex-col max-h-[85vh]">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 md:p-4">
+          <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowLeaderboard(false)}></div>
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-3xl p-5 md:p-8 shadow-2xl animate-modal-pop border-amber-500/20 flex flex-col max-h-[90vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-amber-400 to-orange-600"></div>
-            
             <div className="flex justify-between items-center mb-6 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                    <Crown className="w-6 h-6 text-amber-400" />
+                  <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20 shrink-0">
+                    <Crown className="w-5 h-5 md:w-6 md:h-6 text-amber-400" />
                   </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">อันดับคะแนนสูงสุด</h3>
-                    <p className="text-xs text-slate-500">Top 20 นักเรียนที่ทำคะแนนได้ดีที่สุด</p>
+                  <div className="min-w-0">
+                    <h3 className="text-lg md:text-xl font-bold text-white truncate">อันดับคะแนนสูงสุด</h3>
+                    <p className="text-[10px] md:text-xs text-slate-500 truncate">Top 20 นักเรียนที่มีผลงานยอดเยี่ยม</p>
                   </div>
                 </div>
-                <button onClick={() => setShowLeaderboard(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-400"/></button>
+                <button onClick={() => setShowLeaderboard(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 shrink-0"><X className="w-5 h-5"/></button>
             </div>
 
-            <div className="overflow-y-auto custom-scrollbar flex-1 -mr-2 pr-2">
+            <div className="overflow-x-auto flex-1 custom-scrollbar">
               {leaderboardLoading ? (
-                <div className="flex justify-center items-center py-20">
-                  <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-                </div>
+                <div className="flex justify-center items-center py-20"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>
               ) : leaderboardData.length === 0 ? (
                 <div className="text-center py-10 text-slate-500">ยังไม่มีข้อมูลการสอบ</div>
               ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="text-xs text-slate-500 border-b border-slate-700/50">
-                      <th className="py-3 pl-4 font-medium w-16">อันดับ</th>
-                      <th className="py-3 font-medium">ชื่อ - นามสกุล</th>
-                      <th className="py-3 font-medium hidden sm:table-cell">ห้องเรียน</th>
-                      <th className="py-3 font-medium text-center">เวลาที่ใช้</th>
-                      <th className="py-3 pr-4 font-medium text-right">คะแนน</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm">
-                    {leaderboardData.map((item, index) => (
-                      <tr key={index} className={`border-b border-slate-800/50 hover:bg-white/5 transition-colors group
-                        ${index === 0 ? 'bg-amber-500/5' : ''}
-                      `}>
-                        <td className="py-4 pl-4">
-                          {index === 0 ? <Medal className="w-5 h-5 text-amber-400" /> :
-                           index === 1 ? <Medal className="w-5 h-5 text-slate-300" /> :
-                           index === 2 ? <Medal className="w-5 h-5 text-orange-400" /> :
-                           <span className="text-slate-500 font-mono ml-1.5">{index + 1}</span>}
-                        </td>
-                        <td className="py-4 font-medium text-slate-200 group-hover:text-white transition-colors">
-                          {item.student_name}
-                          {index === 0 && <span className="ml-2 text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">ที่ 1</span>}
-                        </td>
-                        <td className="py-4 text-slate-400 hidden sm:table-cell">{item.class_room}</td>
-                        <td className="py-4 text-center text-slate-500 font-mono text-xs">
-                          {Math.floor(item.time_spent / 60)}:{(item.time_spent % 60).toString().padStart(2, '0')}
-                        </td>
-                        <td className="py-4 pr-4 text-right">
-                          <span className={`font-bold font-mono text-lg ${index < 3 ? 'text-white' : 'text-slate-300'}`}>
-                            {item.score}
-                          </span>
-                          <span className="text-xs text-slate-600 ml-1">/{item.total_score}</span>
-                        </td>
+                <div className="inline-block min-w-full align-middle">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-[10px] md:text-xs text-slate-500 border-b border-slate-700/50">
+                        <th className="py-3 pl-2 md:pl-4 font-medium w-12">#</th>
+                        <th className="py-3 font-medium">ชื่อ - นามสกุล</th>
+                        <th className="py-3 font-medium hidden sm:table-cell">ห้อง</th>
+                        <th className="py-3 font-medium text-center">เวลา</th>
+                        <th className="py-3 pr-2 md:pr-4 font-medium text-right">คะแนน</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="text-[11px] md:text-sm">
+                      {leaderboardData.map((item, index) => (
+                        <tr key={index} className={`border-b border-slate-800/50 hover:bg-white/5 transition-colors ${index === 0 ? 'bg-amber-500/5' : ''}`}>
+                          <td className="py-4 pl-2 md:pl-4">
+                            {index === 0 ? <Medal className="w-4 h-4 md:w-5 md:h-5 text-amber-400" /> :
+                             index === 1 ? <Medal className="w-4 h-4 md:w-5 md:h-5 text-slate-300" /> :
+                             index === 2 ? <Medal className="w-4 h-4 md:w-5 md:h-5 text-orange-400" /> :
+                             <span className="text-slate-500 font-mono ml-1.5">{index + 1}</span>}
+                          </td>
+                          <td className="py-4 font-medium text-slate-200">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate max-w-[80px] md:max-w-none">{item.student_name}</span>
+                              {index === 0 && <span className="hidden xs:inline text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">KING</span>}
+                            </div>
+                          </td>
+                          <td className="py-4 text-slate-400 hidden sm:table-cell">{item.class_room}</td>
+                          <td className="py-4 text-center text-slate-500 font-mono text-[10px] md:text-xs">
+                            {Math.floor(item.time_spent / 60)}:{(item.time_spent % 60).toString().padStart(2, '0')}
+                          </td>
+                          <td className="py-4 pr-2 md:pr-4 text-right">
+                            <span className={`font-bold font-mono text-base md:text-lg ${index < 3 ? 'text-white' : 'text-slate-300'}`}>
+                              {item.score}
+                            </span>
+                            <span className="text-[9px] md:text-xs text-slate-600 ml-1">/{item.total_score}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
+            </div>
+            <div className="mt-4 text-center sm:hidden shrink-0">
+               <p className="text-[10px] text-slate-600 italic">ปัดไปทางซ้ายเพื่อดูข้อมูลเพิ่มเติม</p>
             </div>
           </div>
         </div>
