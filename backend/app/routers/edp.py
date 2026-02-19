@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import desc, func, distinct, case, and_
-# [FIX] เพิ่ม timedelta เข้ามาสำหรับการคำนวณเวลา Active
 from datetime import datetime, timezone, timedelta 
 from typing import List
 from app.database import get_db
@@ -30,24 +29,19 @@ def get_dashboard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. เช็คสิทธิ์ครู
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied: Teachers only")
 
-    # 2. คำนวณสถิติพื้นฐาน (Optimized Queries)
     total_students = db.query(func.count(User.id)).filter(User.role == 'student').scalar()
     total_projects = db.query(func.count(Project.id)).scalar()
     
-    # นับโปรเจคที่เสร็จสมบูรณ์ (ผ่าน Step 6 ด้วยคะแนน >= 60)
     completed_projects = db.query(func.count(distinct(Project.id))).join(EdpStep).filter(
         EdpStep.step_number == 6,
         func.coalesce(EdpStep.teacher_score, EdpStep.score) >= 60
     ).scalar()
 
-    # คะแนนเฉลี่ยรวมทุก Step ของทุกคน
     avg_score = db.query(func.avg(func.coalesce(EdpStep.teacher_score, EdpStep.score))).scalar() or 0.0
 
-    # เวลาเฉลี่ยในแต่ละ Step (วินาที)
     time_stats = db.query(
         EdpStep.step_number, 
         func.avg(EdpStep.time_spent_seconds)
@@ -55,20 +49,17 @@ def get_dashboard_stats(
     
     avg_time_map = {f"Step {s[0]}": round(s[1] or 0, 2) for s in time_stats}
 
-    # [NEW] คำนวณ Active Users (เคลื่อนไหวใน 1 นาทีที่ผ่านมา - Realtime)
     one_min_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     total_active_users = db.query(func.count(User.id)).filter(
         User.role == 'student',
         User.last_active_at >= one_min_ago
     ).scalar()
 
-    # [OPTIMIZED] การกระจายตัวของนักเรียนในแต่ละห้อง (ใช้ SQL Group By แทน Python Loop)
     class_stats = db.query(
         User.class_room, 
         func.count(User.id)
     ).filter(User.role == 'student').group_by(User.class_room).all()
     
-    # แปลงผลลัพธ์จาก list of tuples เป็น dict โดยจัดการกรณีห้องว่างด้วย
     class_dist = { (room or "Unassigned"): count for room, count in class_stats }
 
     return DashboardStats(
@@ -84,16 +75,14 @@ def get_dashboard_stats(
 
 @router.get("/teacher/students", response_model=List[UserInfo])
 def get_all_students(
-    skip: int = 0, # [ADDED] Pagination: เริ่มต้นที่ 0
-    limit: int = 100, # [ADDED] Pagination: ดึงทีละ 100 คน
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # [OPTIMIZED] ดึงข้อมูลนักเรียนพร้อมสถิติใน Query เดียว (แก้ปัญหา N+1 Query)
-    # ใช้ Outer Join เพื่อให้ได้นักเรียนที่ยังไม่มีโปรเจคด้วย และ Group By User ID
     results = db.query(
         User,
         func.count(distinct(Project.id)).label("project_count"),
@@ -104,7 +93,7 @@ def get_all_students(
      .group_by(User.id)\
      .order_by(User.id.desc())\
      .offset(skip).limit(limit)\
-     .all() # [ADDED] Apply Pagination
+     .all()
     
     response_data = []
     for user, p_count, avg_score in results:
@@ -129,7 +118,6 @@ def update_student(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
         
-    # อัปเดตข้อมูลทีละ field
     if update_data.first_name: student.first_name = update_data.first_name
     if update_data.last_name: student.last_name = update_data.last_name
     if update_data.student_id: student.student_id = update_data.student_id
@@ -165,54 +153,49 @@ def get_user_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # นักเรียนเห็นแค่ของตัวเอง
     projects = db.query(Project).filter(Project.owner_id == current_user.id).all()
     return projects
 
 @router.get("/teacher/projects", response_model=List[ProjectWithStudent])
 def get_all_projects_for_teacher(
-    skip: int = 0, # [ADDED] Pagination
-    limit: int = 100, # [ADDED] Pagination
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ครูเห็นของทุกคน
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # [OPTIMIZED] ดึงข้อมูลโปรเจกต์พร้อม Step ล่าสุดใน Query เดียว
-    # ใช้ Subquery หา Step ล่าสุดของแต่ละโปรเจกต์
+    # [FIX 2] แก้ปัญหาโปรเจกต์ขึ้นซ้ำ โดยการดึงเฉพาะ ID ของ Step ล่าสุดจริงๆ (max_step_id) เท่านั้น
     latest_step_sub = db.query(
         EdpStep.project_id,
-        func.max(EdpStep.step_number).label("max_step")
+        func.max(EdpStep.id).label("max_step_id")
     ).group_by(EdpStep.project_id).subquery()
 
-    # Join เพื่อเอา Score ของ Step ล่าสุดนั้นมาด้วย
-    # ใช้ coalesce เพื่อจัดการกรณีโปรเจกต์เพิ่งสร้าง (ยังไม่มี Step)
+    # นำมา Join เพื่อให้ได้ข้อมูลที่ Unique 100%
     projects_query = db.query(
         Project, 
         User, 
-        func.coalesce(latest_step_sub.c.max_step, 0).label("latest_step_num"),
-        EdpStep.score.label("latest_step_score"),
-        EdpStep.teacher_score.label("latest_step_teacher_score")
+        EdpStep
     ).join(User, Project.owner_id == User.id)\
      .outerjoin(latest_step_sub, Project.id == latest_step_sub.c.project_id)\
-     .outerjoin(EdpStep, and_(EdpStep.project_id == Project.id, EdpStep.step_number == latest_step_sub.c.max_step))\
+     .outerjoin(EdpStep, EdpStep.id == latest_step_sub.c.max_step_id)\
      .order_by(Project.created_at.desc())\
      .offset(skip).limit(limit)\
-     .all() # [ADDED] Apply Pagination
+     .all()
     
     results = []
-    for p, owner, step_num, score, t_score in projects_query:
-        # คำนวณ Status
+    for p, owner, edp_step in projects_query:
         status_text = "In Progress"
-        final_score = t_score if t_score is not None else score
+        step_num = 0
         
-        # Logic การตรวจสอบสถานะ
-        if step_num == 6 and final_score is not None and final_score >= 60:
-            status_text = "Completed"
-        elif step_num == 0 or step_num is None:
-            step_num = 0
+        if edp_step:
+            step_num = edp_step.step_number
+            final_score = edp_step.teacher_score if edp_step.teacher_score is not None else edp_step.score
+            
+            if step_num == 6 and final_score is not None and final_score >= 60:
+                status_text = "Completed"
+        else:
             status_text = "Not Started"
         
         p_data = ProjectWithStudent(
@@ -277,21 +260,30 @@ async def submit_edp_step(
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # --- Rate Limiting (15 วินาที) ---
+    # ดึงงานล่าสุดของด่านนี้มาเทียบ
     last_step = db.query(EdpStep).filter(
         EdpStep.project_id == step.project_id,
         EdpStep.step_number == step.step_number
     ).order_by(desc(EdpStep.created_at)).first()
 
-    if last_step and last_step.created_at:
-        now = datetime.now(timezone.utc)
-        last_step_time = last_step.created_at
-        if last_step_time.tzinfo is None:
-            last_step_time = last_step_time.replace(tzinfo=timezone.utc)
-        
-        time_diff = (now - last_step_time).total_seconds()
-        if time_diff < 15:
-            raise HTTPException(status_code=429, detail=f"Please wait {15 - int(time_diff)} seconds")
+    if last_step:
+        # [FIX 1] ดักจับข้อความซ้ำเป๊ะๆ ป้องกันเด็กสแปมส่งเพื่อเปลี่ยนคะแนน
+        if last_step.content.strip() == step.content.strip():
+            raise HTTPException(
+                status_code=400, 
+                detail="เนื้อหาเหมือนกับครั้งที่แล้วเป๊ะเลย! กรุณาปรับปรุงแก้ไขตามคำแนะนำก่อนส่งใหม่นะครับ"
+            )
+
+        # Rate Limiting (15 วินาที)
+        if last_step.created_at:
+            now = datetime.now(timezone.utc)
+            last_step_time = last_step.created_at
+            if last_step_time.tzinfo is None:
+                last_step_time = last_step_time.replace(tzinfo=timezone.utc)
+            
+            time_diff = (now - last_step_time).total_seconds()
+            if time_diff < 15:
+                raise HTTPException(status_code=429, detail=f"กรุณารออีก {15 - int(time_diff)} วินาที ก่อนส่งงานใหม่อีกครั้ง")
 
     # --- AI Analysis ---
     analysis = await ai_service.analyze_step(step.step_number, step.content)
@@ -303,7 +295,6 @@ async def submit_edp_step(
         ai_feedback=analysis.get("feedback_th", "N/A"),
         score=float(analysis.get("relevance_score", 0)),
         
-        # บันทึก Creativity และ Time Spent
         creativity_score=float(analysis.get("creativity_score", 0)),
         time_spent_seconds=step.time_spent_seconds, 
         
@@ -357,7 +348,6 @@ def grade_step(
     if not step:
         raise HTTPException(status_code=404, detail="Step not found")
 
-    # บันทึกคะแนนและคอมเมนต์จากครู
     step.teacher_score = grade.teacher_score
     step.teacher_comment = grade.teacher_comment
     step.is_teacher_reviewed = True

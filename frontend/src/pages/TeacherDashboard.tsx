@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, LayoutDashboard, Users, FolderOpen, 
   Search, Trash2, Edit2, Save, Key, 
   TrendingUp, Activity, PieChart, GraduationCap, CheckCircle,
-  Clock, Signal, Trophy, AlertCircle, X, Menu
+  Clock, Signal, Trophy, AlertCircle, X, Menu, Loader2
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import TeacherQuizAnalytics from './TeacherQuizAnalytics';
@@ -78,7 +78,9 @@ export default function TeacherDashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- [RESPONSIVE] Sidebar open/close state ---
+  // --- States ใหม่สำหรับแก้ความดีเลย์ ---
+  const [isConfirmingAction, setIsConfirmingAction] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,6 +98,9 @@ export default function TeacherDashboard() {
     isOpen: false, title: '', message: '', type: 'success'
   });
 
+  // [FIXED] ใช้ useRef เพื่อเก็บ fetchData ป้องกันการสร้างฟังก์ชันใหม่ พร้อมใส่ initial value เป็น null
+  const fetchRef = useRef<(() => void) | null>(null);
+
   const fetchData = useCallback(async () => {
     try {
       const [resStats, resStudents, resProjects] = await Promise.all([
@@ -108,18 +113,27 @@ export default function TeacherDashboard() {
       setProjects(resProjects.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
-      // ไม่ต้อง Navigate ออก ถ้า Error เล็กน้อย เพื่อกัน Loop Redirect
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // อัปเดต ref ทุกครั้งที่ render
   useEffect(() => {
-    fetchData(); 
-    const interval = setInterval(fetchData, 10000); // ปรับเป็น 10 วินาที เพื่อลดโหลด Server
+    fetchRef.current = fetchData;
+  });
+
+  useEffect(() => {
+    // รันครั้งแรก
+    if (fetchRef.current) fetchRef.current();
+    
+    // ตั้ง interval
+    const interval = setInterval(() => {
+      if (fetchRef.current) fetchRef.current();
+    }, 10000); 
+
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // <--- ต้องเป็น Array ว่างเท่านั้น และใส่ eslint-disable เพื่อป้องกันการแก้ Auto
+  }, []); 
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -134,6 +148,7 @@ export default function TeacherDashboard() {
       confirmText: 'รีเซ็ตรหัสผ่าน',
       confirmColor: 'orange',
       onConfirm: async () => {
+        setIsConfirmingAction(true); // เปิด Loading
         try {
           await client.post(`/auth/reset-password/${studentId}`);
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -144,6 +159,7 @@ export default function TeacherDashboard() {
             type: 'success'
           });
         } catch (err) {
+          console.error("Reset password failed:", err); // [FIXED] ใช้ err
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           const error = err as { response?: { data?: { detail?: string } }; message?: string };
           setAlertModal({
@@ -152,6 +168,8 @@ export default function TeacherDashboard() {
             message: error.response?.data?.detail || "ไม่สามารถรีเซ็ตรหัสผ่านได้",
             type: 'error'
           });
+        } finally {
+          setIsConfirmingAction(false); // ปิด Loading
         }
       }
     });
@@ -165,10 +183,11 @@ export default function TeacherDashboard() {
       confirmText: 'ลบข้อมูลทันที',
       confirmColor: 'red',
       onConfirm: async () => {
+        setIsConfirmingAction(true); // เปิด Loading
         try {
           await client.delete(`/edp/teacher/students/${student.id}`);
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          fetchData();
+          fetchData(); // ดึงข้อมูลใหม่
         } catch (err) {
           console.error("Delete failed:", err);
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
@@ -178,9 +197,27 @@ export default function TeacherDashboard() {
             message: 'ไม่สามารถลบข้อมูลได้',
             type: 'error'
           });
+        } finally {
+          setIsConfirmingAction(false); // ปิด Loading
         }
       }
     });
+  };
+
+  const handleEditStudentSave = async () => {
+    if (!editingStudent) return;
+    setEditLoading(true);
+    try {
+      await client.patch(`/edp/teacher/students/${editingStudent.id}`, editForm);
+      setEditingStudent(null);
+      fetchData(); // ดึงข้อมูลใหม่
+      setAlertModal({ isOpen: true, title: 'สำเร็จ', message: 'อัปเดตข้อมูลนักเรียนเรียบร้อยแล้ว', type: 'success' });
+    } catch (err) {
+      console.error("Update failed:", err); // [FIXED] ใช้ err เผื่อมีปัญหา
+      setAlertModal({ isOpen: true, title: 'ผิดพลาด', message: 'ไม่สามารถแก้ไขข้อมูลได้', type: 'error' });
+    } finally {
+      setEditLoading(false);
+    }
   };
 
   const getFilteredStudents = () => {
@@ -199,7 +236,6 @@ export default function TeacherDashboard() {
     return `${mins}m ${Math.floor(seconds % 60)}s`;
   };
 
-  // --- Sub-Components ---
   const StatCard = ({ title, value, icon: Icon, colorClass, subValue }: StatCardProps) => {
     const colorMap: Record<string, string> = {
       blue: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
@@ -236,7 +272,7 @@ export default function TeacherDashboard() {
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-300 font-kanit flex relative">
       
-      {/* --- [RESPONSIVE] Overlay --- */}
+      {/* Overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/60 z-20 lg:hidden"
@@ -262,7 +298,6 @@ export default function TeacherDashboard() {
                 <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter">Command & Analytics</span>
               </div>
             </div>
-            {/* [RESPONSIVE] Close Sidebar Button */}
             <button
               className="lg:hidden text-slate-400 hover:text-white p-1"
               onClick={() => setSidebarOpen(false)}
@@ -305,7 +340,7 @@ export default function TeacherDashboard() {
       {/* Main Content */}
       <main className="flex-1 lg:ml-72 min-w-0">
 
-        {/* [RESPONSIVE] Top Bar Mobile */}
+        {/* Top Bar Mobile */}
         <div className="lg:hidden sticky top-0 z-10 bg-[#0F172A]/95 backdrop-blur border-b border-slate-800 flex items-center gap-4 px-4 py-3">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -450,13 +485,7 @@ export default function TeacherDashboard() {
 
                           <td className="p-4 lg:p-6">
                             <div className="flex justify-end gap-2 lg:gap-3 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={() => handleResetPassword(s.id, s.first_name)} 
-                                title="รีเซ็ตรหัสผ่านเป็น password123"
-                                className="p-2 lg:p-2.5 bg-orange-500/10 text-orange-400 rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-lg shadow-orange-500/10"
-                              >
-                                <Key className="w-4 h-4"/>
-                              </button>
+                              <button onClick={() => handleResetPassword(s.id, s.first_name)} className="p-2 lg:p-2.5 bg-orange-500/10 text-orange-400 rounded-xl hover:bg-orange-600 hover:text-white transition-all shadow-lg shadow-orange-500/10" title="รีเซ็ตรหัสผ่านเป็น password123"><Key className="w-4 h-4"/></button>
                               <button onClick={() => { setEditingStudent(s); setEditForm({...s}); }} className="p-2 lg:p-2.5 bg-blue-500/10 text-blue-400 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-lg shadow-blue-500/10"><Edit2 className="w-4 h-4"/></button>
                               <button onClick={() => handleDeleteStudent(s)} className="p-2 lg:p-2.5 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-500/10"><Trash2 className="w-4 h-4"/></button>
                             </div>
@@ -540,8 +569,12 @@ export default function TeacherDashboard() {
             </div>
             <div className="flex gap-4 mt-8 sm:mt-10">
               <button onClick={() => setEditingStudent(null)} className="flex-1 px-4 py-3 sm:py-4 text-slate-400 font-bold hover:text-white transition-all text-sm sm:text-base">ยกเลิก</button>
-              <button onClick={() => client.patch(`/edp/teacher/students/${editingStudent.id}`, editForm).then(() => { setEditingStudent(null); fetchData(); })} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 text-sm sm:text-base">
-                <Save className="w-4 h-4 sm:w-5 sm:h-5" /> บันทึก
+              <button 
+                onClick={handleEditStudentSave}
+                disabled={editLoading}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl font-black shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 text-sm sm:text-base disabled:opacity-50"
+              >
+                {editLoading ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Save className="w-4 h-4 sm:w-5 sm:h-5" />} บันทึก
               </button>
             </div>
           </div>
@@ -561,12 +594,13 @@ export default function TeacherDashboard() {
               <button onClick={() => setConfirmModal(prev => ({...prev, isOpen: false}))} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-medium transition-all text-sm">ยกเลิก</button>
               <button 
                 onClick={confirmModal.onConfirm}
-                className={`flex-1 py-3 text-white rounded-xl font-bold shadow-lg transition-all text-sm
+                disabled={isConfirmingAction}
+                className={`flex-1 py-3 text-white rounded-xl font-bold shadow-lg transition-all text-sm flex justify-center items-center gap-2 disabled:opacity-50
                   ${confirmModal.confirmColor === 'red' ? 'bg-red-600 hover:bg-red-500 shadow-red-500/20' : 
                     confirmModal.confirmColor === 'orange' ? 'bg-orange-600 hover:bg-orange-500 shadow-orange-500/20' : 
                     'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/20'}`}
               >
-                {confirmModal.confirmText}
+                {isConfirmingAction ? <Loader2 className="w-4 h-4 animate-spin" /> : confirmModal.confirmText}
               </button>
             </div>
           </div>
