@@ -357,7 +357,7 @@ export default function TeacherQuizAnalytics() {
                   <div className="text-white font-black">{s.latest_score}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold text-amber-500">ดีสุด</div>
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">ดีสุด</div>
                   <div className="text-white font-black">{s.best_score}</div>
                 </div>
               </div>

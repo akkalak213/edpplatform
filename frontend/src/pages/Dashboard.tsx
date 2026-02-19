@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
-  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, Medal, Crown 
+  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, Medal, Crown,
+  ChevronDown, BarChart3, XCircle, CheckCircle // [NEW] นำเข้าไอคอนเพิ่มเติมสำหรับหน้าประวัติ
 } from 'lucide-react';
 import Toast from '../components/Toast';
 
@@ -15,6 +16,15 @@ interface Project {
   created_at?: string;
 }
 
+// [NEW] เพิ่ม Interface สำหรับเก็บข้อมูลรายข้อ
+interface AnswerLog {
+  question_id: number;
+  selected: number;
+  correct: number;
+  is_correct: boolean;
+  category: string;
+}
+
 interface QuizAttempt {
   id: number;
   score: number;
@@ -22,6 +32,7 @@ interface QuizAttempt {
   passed: boolean;
   time_spent_seconds: number;
   created_at: string;
+  details?: AnswerLog[]; // [NEW] รับข้อมูลรายข้อที่ติดมาด้วย (ถ้ามี)
 }
 
 interface LeaderboardItem {
@@ -61,9 +72,15 @@ export default function Dashboard() {
   const [passForm, setPassForm] = useState({ old: '', new: '', confirm: '' });
   const [passLoading, setPassLoading] = useState(false);
 
+  // --- History & Details States ---
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // [NEW] States สำหรับระบบกางดูข้อสอบรายข้อ (Expandable & Performance)
+  const [expandedAttemptId, setExpandedAttemptId] = useState<number | null>(null);
+  const [attemptDetails, setAttemptDetails] = useState<Record<number, AnswerLog[]>>({});
+  const [detailsLoading, setDetailsLoading] = useState<Record<number, boolean>>({});
 
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
@@ -99,6 +116,7 @@ export default function Dashboard() {
 
   const fetchQuizHistory = async () => {
     setHistoryLoading(true);
+    setExpandedAttemptId(null); // [NEW] รีเซ็ตหน้าต่างที่เคยกางไว้เสมอเมื่อเปิดใหม่
     try {
       const res = await client.get('/quiz/history');
       setQuizHistory(res.data);
@@ -108,6 +126,39 @@ export default function Dashboard() {
       showToast("ไม่สามารถดึงข้อมูลประวัติการสอบได้", 'error');
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  // --- [NEW] ฟังก์ชันสำหรับจัดการการแสดงผลรายข้อ (Cache & Performance) ---
+  const handleToggleDetails = async (attemptId: number, initialDetails?: AnswerLog[]) => {
+    // 1. ถ้ากางอยู่แล้ว ให้หุบลง
+    if (expandedAttemptId === attemptId) {
+      setExpandedAttemptId(null);
+      return;
+    }
+    
+    setExpandedAttemptId(attemptId); // สั่งกางหน้าต่าง
+
+    // 2. ถ้าเคยโหลดและมีข้อมูลใน Cache แล้ว ไม่ต้องดึงใหม่
+    if (attemptDetails[attemptId]) return;
+
+    setDetailsLoading(prev => ({ ...prev, [attemptId]: true }));
+
+    try {
+      if (initialDetails && initialDetails.length > 0) {
+        // ใช้ setTimeout เล็กน้อยเพื่อให้ Animation สมูท ไม่โผล่มากระตุก
+        await new Promise(resolve => setTimeout(resolve, 300));
+        setAttemptDetails(prev => ({ ...prev, [attemptId]: initialDetails }));
+      } else {
+        // กรณีไม่มีข้อมูลแนบมาแต่แรก ให้ยิง API ไปดึง
+        const res = await client.get(`/quiz/history/${attemptId}`);
+        setAttemptDetails(prev => ({ ...prev, [attemptId]: res.data.details || res.data || [] }));
+      }
+    } catch (err) {
+      console.error("Failed to fetch attempt details", err);
+      showToast("ดึงรายละเอียดการสอบล้มเหลว", 'error');
+    } finally {
+      setDetailsLoading(prev => ({ ...prev, [attemptId]: false }));
     }
   };
 
@@ -369,7 +420,6 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-            {/* [UPDATED] แสดง Spinner หมุนติ้วๆ ตรงกลาง แทน Skeleton กระพริบ */}
             {isProjectsLoading ? (
               <div className="col-span-full flex flex-col items-center justify-center py-20 bg-[#1E293B]/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm">
                 <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mb-4" />
@@ -583,48 +633,102 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- Quiz History Modal --- */}
+      {/* --- Quiz History Modal (UPDATED WITH EXPANDABLE DETAILS) --- */}
       {showHistoryModal && (
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistoryModal(false)}></div>
-          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-2xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-3xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
             <div className="flex justify-between items-center mb-6 shrink-0">
                 <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบ
+                    <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบของฉัน
                 </h3>
-                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400"><X className="w-5 h-5"/></button>
+                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5"/></button>
             </div>
-            <div className="overflow-y-auto pr-1 space-y-3 custom-scrollbar flex-1">
-              {quizHistory.length === 0 ? (
+            
+            <div className="overflow-y-auto pr-2 space-y-4 custom-scrollbar flex-1">
+              {historyLoading ? (
+                <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
+              ) : quizHistory.length === 0 ? (
                 <div className="text-center py-10 text-slate-500">
                   <Trophy className="w-10 h-10 md:w-12 md:h-12 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">ยังไม่มีประวัติการสอบ</p>
                 </div>
               ) : (
                 quizHistory.map((attempt, index) => (
-                  <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 rounded-2xl p-4 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold shrink-0
-                        ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}
-                      `}>
-                        {quizHistory.length - index}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-white font-bold text-sm md:text-lg flex items-center gap-2 truncate">
-                          {attempt.score} <span className="text-[10px] md:text-sm text-slate-500 font-normal">/ {attempt.total_score}</span>
+                  <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 hover:border-slate-600 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 shadow-lg">
+                    
+                    {/* --- Header Summary (Clickable to Expand) --- */}
+                    <div 
+                      onClick={() => handleToggleDetails(attempt.id, attempt.details)}
+                      className="p-4 md:p-5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-xs md:text-base font-bold shrink-0 shadow-inner
+                          ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}
+                        `}>
+                          #{quizHistory.length - index}
                         </div>
-                        <div className="text-[9px] md:text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-1">
-                          <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {formatDate(attempt.created_at)}</span>
-                          <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {formatTime(attempt.time_spent_seconds)}</span>
+                        <div className="min-w-0">
+                          <div className="text-white font-black text-base md:text-xl flex items-center gap-2 truncate">
+                            {attempt.score} <span className="text-xs md:text-sm text-slate-500 font-medium">/ {attempt.total_score}</span>
+                          </div>
+                          <div className="text-[10px] md:text-xs text-slate-400 flex flex-wrap items-center gap-3 mt-1.5">
+                            <span className="flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> {formatDate(attempt.created_at)}</span>
+                            <span className="flex items-center gap-1"><Activity className="w-3.5 h-3.5" /> {formatTime(attempt.time_spent_seconds)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 md:gap-4 shrink-0">
+                        <div className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold
+                          ${attempt.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
+                        `}>
+                          {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
+                        </div>
+                        <div className={`p-1.5 rounded-full transition-transform duration-300 ${expandedAttemptId === attempt.id ? 'rotate-180 bg-slate-800' : 'bg-transparent'}`}>
+                           <ChevronDown className="w-5 h-5 text-slate-400" />
                         </div>
                       </div>
                     </div>
-                    <div className={`px-2 md:px-3 py-1 rounded-lg text-[9px] md:text-xs font-bold shrink-0
-                      ${attempt.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
-                    `}>
-                      {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
+
+                    {/* --- Expandable Details Area (รายข้อ - ซ่อนเฉลย) --- */}
+                    <div 
+                      className={`grid transition-all duration-300 ease-in-out ${
+                        expandedAttemptId === attempt.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="p-4 md:p-6 border-t border-slate-700/50 bg-[#0F172A]/50">
+                          {detailsLoading[attempt.id] ? (
+                             <div className="flex flex-col justify-center items-center py-6 md:py-8 gap-3">
+                                <Loader2 className="w-6 h-6 md:w-8 md:h-8 animate-spin text-indigo-500" />
+                                <span className="text-[10px] md:text-xs text-slate-400 animate-pulse">กำลังประมวลผลข้อมูลรายข้อ...</span>
+                             </div>
+                          ) : attemptDetails[attempt.id] && attemptDetails[attempt.id].length > 0 ? (
+                             <div>
+                                <h4 className="text-[10px] md:text-xs font-bold text-slate-300 mb-3 md:mb-4 uppercase tracking-wider flex items-center gap-2">
+                                   <BarChart3 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-400"/> สรุปผลรายข้อ <span className="text-slate-500 font-normal">(ซ่อนเฉลย)</span>
+                                </h4>
+                                {/* Grid Responsive: มือถือ 5 คอลัมน์ / แท็บเล็ต 8 / คอม 10 */}
+                                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 md:gap-3">
+                                   {attemptDetails[attempt.id].map((log, i) => (
+                                      <div key={i} className={`flex flex-col items-center justify-center py-2 md:py-3 rounded-xl border transition-all hover:scale-105
+                                        ${log.is_correct ? 'bg-green-500/5 border-green-500/20 hover:border-green-500/40' : 'bg-red-500/5 border-red-500/20 hover:border-red-500/40'}
+                                      `}>
+                                         <span className="text-[10px] md:text-xs text-slate-500 font-mono mb-1 md:mb-1.5 font-medium">{i + 1}</span>
+                                         {log.is_correct ? <CheckCircle className="w-3.5 h-3.5 md:w-5 md:h-5 text-green-500 shadow-sm"/> : <XCircle className="w-3.5 h-3.5 md:w-5 md:h-5 text-red-500 shadow-sm"/>}
+                                      </div>
+                                   ))}
+                                </div>
+                             </div>
+                          ) : (
+                             <div className="text-center py-6 text-slate-500 text-xs md:text-sm">ไม่พบรายละเอียดการสอบ</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
                   </div>
                 ))
               )}
