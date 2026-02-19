@@ -7,13 +7,14 @@ from app.models.edp import QuizQuestion, QuizAttempt, User
 from app.routers.auth import get_current_user
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-import random # [NEW] นำเข้าโมดูล random สำหรับการสุ่ม
+import random
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
 # --- Schemas ---
 class QuizSubmission(BaseModel):
-    answers: Dict[int, int] # { question_id: selected_original_choice_index }
+    # [FIX] เปลี่ยนจากส่ง Index เป็นส่งข้อความ Text ของตัวเลือกมาเลย
+    answers: Dict[int, str] # { question_id: "ข้อความตัวเลือกที่เด็กเลือก" }
     time_spent_seconds: int
 
 # --- Endpoints (Student) ---
@@ -21,27 +22,18 @@ class QuizSubmission(BaseModel):
 @router.get("/questions")
 def get_quiz_questions(db: Session = Depends(get_db)):
     questions = db.query(QuizQuestion).all()
-    
-    # [NEW] 1. สุ่มลำดับข้อสอบทั้งหมด
     random.shuffle(questions)
     
     result = []
     for q in questions:
-        # [NEW] 2. สุ่มลำดับตัวเลือก (Choices)
-        # สร้างลิสต์จับคู่ (index เดิม, ข้อความตัวเลือก) เพื่อให้รู้ว่าตัวเลือกไหนคือคำตอบที่ถูกต้อง
-        choices_with_index = list(enumerate(q.choices))
-        random.shuffle(choices_with_index)
-        
-        # แยกเฉพาะข้อความตัวเลือกที่ถูกสุ่มแล้วเพื่อส่งไปแสดงผล
-        shuffled_choices = [item[1] for item in choices_with_index]
-        # แยกเฉพาะ index ต้นฉบับ เพื่อให้หน้าบ้านใช้ส่งกลับมาตรวจ
-        original_indexes = [item[0] for item in choices_with_index]
+        # ดึงตัวเลือกมาสับเปลี่ยนให้มั่ว
+        shuffled_choices = list(q.choices)
+        random.shuffle(shuffled_choices)
         
         result.append({
             "id": q.id,
             "question_text": q.question_text,
-            "choices": shuffled_choices, # ส่งตัวเลือกที่สับเปลี่ยนแล้ว
-            "original_indexes": original_indexes, # ส่ง index อ้างอิง
+            "choices": shuffled_choices, # ส่งตัวเลือกที่มั่วแล้วไปให้
             "order": q.order,
             "category": q.category
         })
@@ -60,20 +52,24 @@ def submit_quiz(
     total_score = len(questions)
     log = []
 
-    # ตรวจคำตอบ (โดยระบบหน้าบ้านจะส่ง original_idx_selected กลับมาให้เราตรวจเสมอ)
-    for q_id, original_idx_selected in submission.answers.items():
+    # ตรวจคำตอบแบบเอา Text มาเทียบกันตรงๆ
+    for q_id, selected_text in submission.answers.items():
         q_id = int(q_id)
         question = question_map.get(q_id)
+        
         if question:
-            # ตรวจสอบกับคำตอบที่ถูกต้องที่บันทึกไว้ใน DB
-            is_correct = (question.correct_choice_index == original_idx_selected)
+            # หาข้อความที่เป็นคำตอบที่ถูกต้องจาก DB
+            correct_text = question.choices[question.correct_choice_index]
+            
+            # ถ้าเด็กเลือกข้อความตรงกับเฉลย ถือว่าถูก
+            is_correct = (selected_text == correct_text)
             if is_correct:
                 score += 1
             
             log.append({
                 "question_id": q_id,
-                "selected": original_idx_selected, # บันทึก Index ที่ผู้ใช้เลือกแบบอิงจากตัวเลือกต้นฉบับ
-                "correct": question.correct_choice_index,
+                "selected_text": selected_text, # บันทึกเป็น Text
+                "correct_text": correct_text,   # บันทึกเป็น Text
                 "is_correct": is_correct,
                 "category": question.category
             })
@@ -102,8 +98,6 @@ def submit_quiz(
     }
 
 # -------------------------------------------------------------------
-# ✅ [FIXED 1] แปลง answers_log ให้ชื่อว่า details ตอนส่งกลับไปหน้าบ้าน
-# -------------------------------------------------------------------
 @router.get("/history")
 def get_quiz_history(
     db: Session = Depends(get_db),
@@ -122,13 +116,10 @@ def get_quiz_history(
             "passed": att.passed,
             "time_spent_seconds": att.time_spent_seconds,
             "created_at": att.created_at,
-            "details": att.answers_log or []  # แปลงเป็นคำว่า details ให้หน้าบ้านรู้จัก
+            "details": att.answers_log or []
         })
     return history_list
 
-# -------------------------------------------------------------------
-# ✅ [FIXED 2] สร้าง Endpoint สำรอง เผื่อหน้าบ้านต้องการยิงมาเอาเฉพาะรายข้อ
-# -------------------------------------------------------------------
 @router.get("/history/{attempt_id}")
 def get_quiz_attempt_details(
     attempt_id: int,

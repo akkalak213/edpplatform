@@ -11,15 +11,14 @@ interface Question {
   id: number;
   question_text: string;
   choices: string[];
-  original_indexes: number[]; // [NEW] รับค่าจาก API เพื่อรู้ว่าข้อที่สุ่มมาคือตัวเลือกไหน
   order: number;
   category: string;
 }
 
 interface AnswerLog {
   question_id: number;
-  selected: number;
-  correct: number;
+  selected_text: string; // [FIX] รับเป็น Text แทน
+  correct_text: string;  // [FIX] รับเป็น Text แทน
   is_correct: boolean;
   category: string;
 }
@@ -38,7 +37,9 @@ export default function StudentQuiz() {
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({}); 
+  
+  // [FIX] เปลี่ยนเก็บจาก Index เป็น Text
+  const [answers, setAnswers] = useState<Record<number, string>>({}); 
   const [isLocked, setIsLocked] = useState(false); 
   
   const [quizStarted, setQuizStarted] = useState(false);
@@ -96,7 +97,7 @@ export default function StudentQuiz() {
     setIsLocked(false);
     setSubmitting(false);
     setShowExitConfirm(false);
-    fetchQuestions(); // ดึงข้อสอบมาสุ่มใหม่เมื่อเริ่มใหม่
+    fetchQuestions(); 
   };
 
   const handleBackCheck = () => {
@@ -152,11 +153,11 @@ export default function StudentQuiz() {
     setShowExitConfirm(false);
   };
 
-  const handleSelectChoice = (originalIdx: number) => {
+  const handleSelectChoice = (choiceText: string) => {
     if (isLocked) return; 
     const qId = questions[currentQIndex].id;
-    // เก็บ original index แทน index ของหน้าจอ เพื่อให้ส่งไปตรวจที่ Backend ได้ถูกต้อง
-    setAnswers(prev => ({ ...prev, [qId]: originalIdx }));
+    // [FIX] เก็บข้อความตัวเลือกไว้แทน Index
+    setAnswers(prev => ({ ...prev, [qId]: choiceText }));
   };
 
   const handleConfirm = () => {
@@ -317,9 +318,10 @@ export default function StudentQuiz() {
 
   // --- 2. Quiz Interface ---
   const currentQ = questions[currentQIndex];
-  // ตอนเลือก เราเช็คว่า id นี้ เลือกตัวเลือกที่เป็น original_index อะไร
-  const selectedOriginalIdx = answers[currentQ.id]; 
-  const hasAnswered = selectedOriginalIdx !== undefined;
+  
+  // [FIX] เช็คว่า text ที่เลือกคืออะไร
+  const selectedText = answers[currentQ.id]; 
+  const hasAnswered = selectedText !== undefined;
   const isLastQuestion = currentQIndex === questions.length - 1;
 
   return (
@@ -355,19 +357,17 @@ export default function StudentQuiz() {
           </span>
           <h3 className="text-xl md:text-2xl font-bold text-white leading-relaxed">
             {currentQ.question_text.split('. ')[1] || currentQ.question_text} 
-            {/* ตัดตัวเลขข้อเก่าออก เพราะตอนนี้มันสุ่มลำดับข้อแล้ว */}
           </h3>
         </div>
 
         <div className="space-y-4">
           {currentQ.choices.map((choice, displayIdx) => {
-            const originalIdx = currentQ.original_indexes[displayIdx];
-            const isSelected = selectedOriginalIdx === originalIdx;
+            const isSelected = selectedText === choice; // [FIX] เช็คด้วย Text
 
             return (
               <button
                 key={displayIdx}
-                onClick={() => handleSelectChoice(originalIdx)}
+                onClick={() => handleSelectChoice(choice)} // [FIX] ส่ง Text กลับไป
                 disabled={isLocked || submitting}
                 className={`w-full p-5 rounded-2xl border text-left transition-all relative overflow-hidden group
                   ${isSelected 
