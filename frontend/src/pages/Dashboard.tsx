@@ -661,7 +661,19 @@ export default function Dashboard() {
 
                 <div>
                   <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">ห้องเรียน</label>
-                  <input type="text" required value={profileForm.class_room} onChange={e => setProfileForm({...profileForm, class_room: e.target.value})} className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20" />
+                  <select 
+                    required 
+                    value={profileForm.class_room} 
+                    onChange={e => setProfileForm({...profileForm, class_room: e.target.value})} 
+                    className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20 appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>เลือกห้องเรียน</option>
+                    <option value="ม.4/1">ม.4/1</option>
+                    <option value="ม.4/2">ม.4/2</option>
+                    <option value="ม.4/3">ม.4/3</option>
+                    <option value="ม.4/4">ม.4/4</option>
+                    <option value="ม.4/5">ม.4/5</option>
+                  </select>
                 </div>
 
                 <button type="submit" disabled={profileLoading} className="w-full py-3.5 mt-2 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 text-sm transition-all">
