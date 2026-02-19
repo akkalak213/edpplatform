@@ -7,30 +7,45 @@ from app.models.edp import QuizQuestion, QuizAttempt, User
 from app.routers.auth import get_current_user
 from pydantic import BaseModel
 from typing import List, Dict, Optional
+import random # [NEW] นำเข้าโมดูล random สำหรับการสุ่ม
 
 router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
 # --- Schemas ---
-# (ใช้แบบ Inline เพื่อความชัวร์ ไม่ต้องแก้ไฟล์อื่น)
 class QuizSubmission(BaseModel):
-    answers: Dict[int, int] # { question_id: selected_choice_index }
+    answers: Dict[int, int] # { question_id: selected_original_choice_index }
     time_spent_seconds: int
 
 # --- Endpoints (Student) ---
 
 @router.get("/questions")
 def get_quiz_questions(db: Session = Depends(get_db)):
-    # ส่งโจทย์ไปให้หน้าบ้าน (แต่ไม่ส่งเฉลยไปด้วย เพื่อกันการโกง)
-    questions = db.query(QuizQuestion).order_by(QuizQuestion.order).all()
-    return [
-        {
+    questions = db.query(QuizQuestion).all()
+    
+    # [NEW] 1. สุ่มลำดับข้อสอบทั้งหมด
+    random.shuffle(questions)
+    
+    result = []
+    for q in questions:
+        # [NEW] 2. สุ่มลำดับตัวเลือก (Choices)
+        # สร้างลิสต์จับคู่ (index เดิม, ข้อความตัวเลือก) เพื่อให้รู้ว่าตัวเลือกไหนคือคำตอบที่ถูกต้อง
+        choices_with_index = list(enumerate(q.choices))
+        random.shuffle(choices_with_index)
+        
+        # แยกเฉพาะข้อความตัวเลือกที่ถูกสุ่มแล้วเพื่อส่งไปแสดงผล
+        shuffled_choices = [item[1] for item in choices_with_index]
+        # แยกเฉพาะ index ต้นฉบับ เพื่อให้หน้าบ้านใช้ส่งกลับมาตรวจ
+        original_indexes = [item[0] for item in choices_with_index]
+        
+        result.append({
             "id": q.id,
             "question_text": q.question_text,
-            "choices": q.choices,
+            "choices": shuffled_choices, # ส่งตัวเลือกที่สับเปลี่ยนแล้ว
+            "original_indexes": original_indexes, # ส่ง index อ้างอิง
             "order": q.order,
             "category": q.category
-        } for q in questions
-    ]
+        })
+    return result
 
 @router.post("/submit")
 def submit_quiz(
@@ -38,7 +53,6 @@ def submit_quiz(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    # 1. โหลดเฉลยทั้งหมด
     questions = db.query(QuizQuestion).all()
     question_map = {q.id: q for q in questions}
     
@@ -46,24 +60,24 @@ def submit_quiz(
     total_score = len(questions)
     log = []
 
-    # 2. ตรวจคำตอบ
-    for q_id, selected_idx in submission.answers.items():
+    # ตรวจคำตอบ (โดยระบบหน้าบ้านจะส่ง original_idx_selected กลับมาให้เราตรวจเสมอ)
+    for q_id, original_idx_selected in submission.answers.items():
         q_id = int(q_id)
         question = question_map.get(q_id)
         if question:
-            is_correct = (question.correct_choice_index == selected_idx)
+            # ตรวจสอบกับคำตอบที่ถูกต้องที่บันทึกไว้ใน DB
+            is_correct = (question.correct_choice_index == original_idx_selected)
             if is_correct:
                 score += 1
             
             log.append({
                 "question_id": q_id,
-                "selected": selected_idx,
+                "selected": original_idx_selected, # บันทึก Index ที่ผู้ใช้เลือกแบบอิงจากตัวเลือกต้นฉบับ
                 "correct": question.correct_choice_index,
                 "is_correct": is_correct,
                 "category": question.category
             })
 
-    # 3. บันทึกผล
     percent = (score / total_score) * 100 if total_score > 0 else 0
     passed = percent >= 80
 
