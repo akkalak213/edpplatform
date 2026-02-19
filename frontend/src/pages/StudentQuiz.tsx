@@ -4,7 +4,7 @@ import client from '../api/client';
 import { 
   ArrowLeft, Clock, CheckCircle, 
   ChevronRight, Trophy, Play, Lock, Unlock, Loader2, AlertTriangle, XCircle, LogOut, 
-  RotateCw
+  RotateCw, ChevronLeft
 } from 'lucide-react';
 
 interface Question {
@@ -58,15 +58,14 @@ export default function StudentQuiz() {
   const [cheatingDetected, setCheatingDetected] = useState(false);
   const isQuizActiveRef = useRef(false);
 
-  // [FIXED] อุดช่องโหว่: เอาเงื่อนไข !showExitConfirm ออก
-  // ต่อให้เปิด Modal ยืนยันค้างไว้ ถ้าสลับจอ ก็ต้องโดนจับโกงทันที
+  // อุดช่องโหว่: ถ้าสลับจอ ต้องโดนจับโกงทันที
   useEffect(() => {
     isQuizActiveRef.current = quizStarted && !quizFinished;
   }, [quizStarted, quizFinished]);
 
   useEffect(() => {
     const handleViolation = () => {
-      // เช็คว่ากำลังสอบอยู่ไหม (โดยไม่สนว่าเปิด Modal ยืนยันอยู่หรือเปล่า)
+      // เช็คว่ากำลังสอบอยู่ไหม
       if (isQuizActiveRef.current) {
         setCheatingDetected(true);
         // ปิด Modal ยืนยันทันที เพื่อแสดงหน้าจอจับโกงแทน
@@ -127,7 +126,7 @@ export default function StudentQuiz() {
   }, []);
 
   useEffect(() => {
-    // Timer เดินตลอดตราบเท่าที่ยังไม่จบการสอบและยังไม่โดนจับโกง (แม้จะเปิด Modal ยืนยันอยู่ เวลาต้องเดินต่อ)
+    // Timer เดินตลอดตราบเท่าที่ยังไม่จบการสอบและยังไม่โดนจับโกง
     if (quizStarted && !quizFinished && !cheatingDetected) {
       timerRef.current = window.setInterval(() => {
         setTimeSeconds(prev => prev + 1);
@@ -183,12 +182,21 @@ export default function StudentQuiz() {
     }
   };
 
+  // [NEW] ฟังก์ชันสำหรับย้อนกลับไปข้อที่แล้ว
+  const handlePrevious = () => {
+    if (currentQIndex > 0) {
+      setCurrentQIndex(prev => prev - 1);
+      // ปลดล็อกตัวเลือกให้แก้ใหม่ได้เสมอเมื่อย้อนกลับมา
+      setIsLocked(false);
+    }
+  };
+
   const finishQuiz = async () => {
     if (submitting) return;
 
     setSubmitting(true);
     setQuizFinished(true);
-    setShowExitConfirm(false); // ปิด Modal ยืนยันถ้ามีค้างอยู่
+    setShowExitConfirm(false); 
     
     if (timerRef.current) clearInterval(timerRef.current);
 
@@ -398,7 +406,20 @@ export default function StudentQuiz() {
 
       {/* Footer Controls */}
       <footer className="p-6 border-t border-slate-800 bg-[#0F172A] sticky bottom-0 z-20">
-        <div className="max-w-3xl mx-auto flex gap-4">
+        <div className="max-w-3xl mx-auto flex gap-3">
+          
+          {/* [NEW] ปุ่มย้อนกลับ (แสดงเฉพาะตอนที่ไม่ได้อยู่ข้อแรก) */}
+          {currentQIndex > 0 && (
+            <button 
+              onClick={handlePrevious}
+              disabled={submitting}
+              className="px-4 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold border border-slate-600 transition-all flex items-center justify-center"
+              title="ย้อนกลับไปข้อที่แล้ว"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+
           {!isLocked ? (
             <button 
               onClick={handleConfirm}
@@ -437,7 +458,7 @@ export default function StudentQuiz() {
         </div>
       </footer>
 
-      {/* --- [NEW] EXIT CONFIRMATION MODAL --- */}
+      {/* --- EXIT CONFIRMATION MODAL --- */}
       {showExitConfirm && (
         <div className="fixed inset-0 z-100 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
