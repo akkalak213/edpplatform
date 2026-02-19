@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
   LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
-  Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, Medal, Crown,
-  ChevronDown, BarChart3, XCircle, CheckCircle // [NEW] นำเข้าไอคอนเพิ่มเติมสำหรับหน้าประวัติ
+  Layers, Search, CalendarClock, AlertTriangle, Lock, Trophy, History, Medal, Crown,
+  ChevronDown, BarChart3, XCircle, CheckCircle, User
 } from 'lucide-react';
 import Toast from '../components/Toast';
 
@@ -16,7 +16,6 @@ interface Project {
   created_at?: string;
 }
 
-// [NEW] เพิ่ม Interface สำหรับเก็บข้อมูลรายข้อ
 interface AnswerLog {
   question_id: number;
   selected: number;
@@ -32,7 +31,7 @@ interface QuizAttempt {
   passed: boolean;
   time_spent_seconds: number;
   created_at: string;
-  details?: AnswerLog[]; // [NEW] รับข้อมูลรายข้อที่ติดมาด้วย (ถ้ามี)
+  details?: AnswerLog[]; 
 }
 
 interface LeaderboardItem {
@@ -49,10 +48,8 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Loading State แยกกันเพื่อให้รู้สึกเร็วขึ้น
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
 
-  // Toast State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; isVisible: boolean }>({ 
     message: '', type: 'success', isVisible: false 
   });
@@ -68,16 +65,20 @@ export default function Dashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(''); 
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileTab, setProfileTab] = useState<'info' | 'password'>('info');
+  const [profileForm, setProfileForm] = useState({
+    first_name: '', last_name: '', student_id: '', email: '', class_room: ''
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+
   const [passForm, setPassForm] = useState({ old: '', new: '', confirm: '' });
   const [passLoading, setPassLoading] = useState(false);
 
-  // --- History & Details States ---
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-
-  // [NEW] States สำหรับระบบกางดูข้อสอบรายข้อ (Expandable & Performance)
+  
   const [expandedAttemptId, setExpandedAttemptId] = useState<number | null>(null);
   const [attemptDetails, setAttemptDetails] = useState<Record<number, AnswerLog[]>>({});
   const [detailsLoading, setDetailsLoading] = useState<Record<number, boolean>>({});
@@ -86,20 +87,25 @@ export default function Dashboard() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
-  // Logout Confirmation State
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
-    // 1. โหลด Projects ทันที (ไม่ต้องรอ Leaderboard)
     fetchProjects();
-    
-    // 2. โหลด Leaderboard แยกต่างหาก (Background)
     fetchLeaderboard();
+    fetchProfile();
   }, []);
 
-  // Toast Helper
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type, isVisible: true });
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const res = await client.get('/auth/me');
+      setProfileForm(res.data);
+    } catch (err) {
+      console.error("Failed to fetch profile", err);
+    }
   };
 
   const fetchProjects = async () => {
@@ -116,7 +122,7 @@ export default function Dashboard() {
 
   const fetchQuizHistory = async () => {
     setHistoryLoading(true);
-    setExpandedAttemptId(null); // [NEW] รีเซ็ตหน้าต่างที่เคยกางไว้เสมอเมื่อเปิดใหม่
+    setExpandedAttemptId(null);
     try {
       const res = await client.get('/quiz/history');
       setQuizHistory(res.data);
@@ -129,28 +135,22 @@ export default function Dashboard() {
     }
   };
 
-  // --- [NEW] ฟังก์ชันสำหรับจัดการการแสดงผลรายข้อ (Cache & Performance) ---
   const handleToggleDetails = async (attemptId: number, initialDetails?: AnswerLog[]) => {
-    // 1. ถ้ากางอยู่แล้ว ให้หุบลง
     if (expandedAttemptId === attemptId) {
       setExpandedAttemptId(null);
       return;
     }
     
-    setExpandedAttemptId(attemptId); // สั่งกางหน้าต่าง
-
-    // 2. ถ้าเคยโหลดและมีข้อมูลใน Cache แล้ว ไม่ต้องดึงใหม่
+    setExpandedAttemptId(attemptId);
     if (attemptDetails[attemptId]) return;
 
     setDetailsLoading(prev => ({ ...prev, [attemptId]: true }));
 
     try {
       if (initialDetails && initialDetails.length > 0) {
-        // ใช้ setTimeout เล็กน้อยเพื่อให้ Animation สมูท ไม่โผล่มากระตุก
         await new Promise(resolve => setTimeout(resolve, 300));
         setAttemptDetails(prev => ({ ...prev, [attemptId]: initialDetails }));
       } else {
-        // กรณีไม่มีข้อมูลแนบมาแต่แรก ให้ยิง API ไปดึง
         const res = await client.get(`/quiz/history/${attemptId}`);
         setAttemptDetails(prev => ({ ...prev, [attemptId]: res.data.details || res.data || [] }));
       }
@@ -167,7 +167,6 @@ export default function Dashboard() {
     try {
       const res = await client.get('/quiz/leaderboard');
       setLeaderboardData(res.data);
-      // [RESTORED] ถ้ามีข้อมูล ให้เด้ง Popup ขึ้นมาตามที่ขอ
       if (res.data.length > 0) {
         setShowLeaderboard(true);
       }
@@ -229,6 +228,24 @@ export default function Dashboard() {
     }
   };
 
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    try {
+        await client.patch('/auth/profile', {
+            first_name: profileForm.first_name,
+            last_name: profileForm.last_name,
+            class_room: profileForm.class_room
+        });
+        showToast("อัปเดตข้อมูลสำเร็จ!", 'success');
+    } catch (err) {
+        console.error("Update profile error:", err); // [FIXED] ใช้ตัวแปร err เพื่อแก้ ESLint warning
+        showToast("อัปเดตข้อมูลไม่สำเร็จ", 'error');
+    } finally {
+        setProfileLoading(false);
+    }
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passForm.new !== passForm.confirm) {
@@ -242,8 +259,8 @@ export default function Dashboard() {
             new_password: passForm.new
         });
         showToast("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!", 'success');
-        setShowPasswordModal(false);
         setPassForm({ old: '', new: '', confirm: '' });
+        setShowProfileModal(false);
     } catch (err) {
         const error = err as { response?: { data?: { detail?: string } } };
         const errorMsg = error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง";
@@ -276,13 +293,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#020617] text-slate-300 relative overflow-x-hidden selection:bg-cyan-500/20 selection:text-cyan-200">
       
-      {/* Toast Notification */}
       {toast.isVisible && (
-        <Toast 
-          message={toast.message} 
-          type={toast.type} 
-          onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} 
-        />
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} />
       )}
 
       {/* --- Ambient Background --- */}
@@ -326,16 +338,13 @@ export default function Dashboard() {
 
             {/* Action Buttons Section */}
             <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3 w-full sm:w-auto">
-              {/* Search (Desktop only inline, mobile hidden or can be added as a button) */}
+              {/* Search Desktop */}
               <div className="relative group hidden lg:block">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-4 w-4 text-slate-500 group-focus-within:text-cyan-400 transition-colors" />
                 </div>
                 <input
-                  type="text"
-                  placeholder="ค้นหาโครงงาน..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  type="text" placeholder="ค้นหาโครงงาน..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
                   className="bg-[#0F172A]/50 border border-slate-700/50 text-slate-300 text-sm rounded-xl pl-10 pr-4 py-2 focus:ring-1 focus:ring-cyan-500/50 outline-none transition-all w-40 focus:w-56"
                 />
               </div>
@@ -373,11 +382,11 @@ export default function Dashboard() {
               </button>
 
               <button 
-                onClick={() => setShowPasswordModal(true)}
+                onClick={() => { setProfileTab('info'); setShowProfileModal(true); }}
                 className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all shrink-0"
-                title="เปลี่ยนรหัสผ่าน"
+                title="โปรไฟล์ส่วนตัว"
               >
-                <Key className="w-5 h-5" />
+                <User className="w-5 h-5" />
               </button>
 
               <button 
@@ -390,16 +399,13 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Search (Mobile Only) */}
+          {/* Search Mobile */}
           <div className="relative group lg:hidden w-full">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-slate-500" />
             </div>
             <input
-              type="text"
-              placeholder="ค้นหาโครงงาน..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              type="text" placeholder="ค้นหาโครงงาน..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#0F172A]/50 border border-slate-700/50 text-slate-300 text-sm rounded-xl pl-10 pr-4 py-2.5 outline-none"
             />
           </div>
@@ -598,42 +604,98 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* --- Change Password Modal --- */}
-      {showPasswordModal && (
+      {/* --- Profile & Change Password Modal --- */}
+      {showProfileModal && (
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowPasswordModal(false)}></div>
+          <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowProfileModal(false)}></div>
           <div className="relative glass-tech bg-[#0F172A] rounded-4xl w-full max-w-md p-6 md:p-8 shadow-2xl animate-modal-pop border-cyan-500/20 my-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-cyan-500 to-blue-500"></div>
+            
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <Lock className="w-5 h-5 text-cyan-400" /> เปลี่ยนรหัสผ่าน
+                    <User className="w-5 h-5 text-cyan-400" /> โปรไฟล์ของฉัน
                 </h3>
-                <button onClick={() => setShowPasswordModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5"/></button>
+                <button onClick={() => setShowProfileModal(false)} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400"><X className="w-5 h-5"/></button>
             </div>
-            <form onSubmit={handleChangePassword} className="space-y-4">
-                {['old', 'new', 'confirm'].map((key) => (
-                  <div key={key}>
-                    <label className="text-[10px] text-slate-400 font-medium ml-1">
-                      {key === 'old' ? 'รหัสผ่านเดิม' : key === 'new' ? 'รหัสผ่านใหม่' : 'ยืนยันรหัสผ่านใหม่'}
-                    </label>
-                    <input 
-                      type="password" required
-                      value={passForm[key as keyof typeof passForm]}
-                      onChange={(e) => setPassForm({...passForm, [key]: e.target.value})}
-                      className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20"
-                      placeholder="••••••"
-                    />
+
+            {/* --- Tabs --- */}
+            <div className="flex bg-slate-900/50 p-1 rounded-xl mb-6 border border-slate-800">
+              <button 
+                onClick={() => setProfileTab('info')}
+                className={`flex-1 py-2 text-xs md:text-sm font-medium rounded-lg transition-all ${profileTab === 'info' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+              >
+                ข้อมูลส่วนตัว
+              </button>
+              <button 
+                onClick={() => setProfileTab('password')}
+                className={`flex-1 py-2 text-xs md:text-sm font-medium rounded-lg transition-all ${profileTab === 'password' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-300'}`}
+              >
+                เปลี่ยนรหัสผ่าน
+              </button>
+            </div>
+
+            {/* --- Tab Content: Info --- */}
+            {profileTab === 'info' ? (
+              <form onSubmit={handleUpdateProfile} className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">รหัสนักเรียน <Lock className="w-2.5 h-2.5 inline-block -mt-0.5 text-slate-500"/></label>
+                    <input type="text" value={profileForm.student_id} disabled className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800/50 rounded-xl text-slate-500 text-sm cursor-not-allowed" />
                   </div>
-                ))}
-                <button type="submit" disabled={passLoading} className="w-full py-3.5 mt-4 text-white bg-linear-to-r from-cyan-600 to-blue-600 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 text-sm">
-                    {passLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'ยืนยันการเปลี่ยนรหัสผ่าน'}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">อีเมล <Lock className="w-2.5 h-2.5 inline-block -mt-0.5 text-slate-500"/></label>
+                    <input type="text" value={profileForm.email} disabled className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800/50 rounded-xl text-slate-500 text-sm cursor-not-allowed truncate" title={profileForm.email} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">ชื่อจริง</label>
+                    <input type="text" required value={profileForm.first_name} onChange={e => setProfileForm({...profileForm, first_name: e.target.value})} className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">นามสกุล</label>
+                    <input type="text" required value={profileForm.last_name} onChange={e => setProfileForm({...profileForm, last_name: e.target.value})} className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">ห้องเรียน</label>
+                  <input type="text" required value={profileForm.class_room} onChange={e => setProfileForm({...profileForm, class_room: e.target.value})} className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20" />
+                </div>
+
+                <button type="submit" disabled={profileLoading} className="w-full py-3.5 mt-2 text-white bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 text-sm transition-all">
+                    {profileLoading ? <Loader2 className="animate-spin w-5 h-5" /> : 'บันทึกข้อมูลส่วนตัว'}
                 </button>
-            </form>
+              </form>
+            ) : (
+              /* --- Tab Content: Password --- */
+              <form onSubmit={handleChangePassword} className="space-y-4 animate-in fade-in slide-in-from-right-2 duration-300">
+                  {['old', 'new', 'confirm'].map((key) => (
+                    <div key={key}>
+                      <label className="text-[10px] text-slate-400 font-medium ml-1 mb-1 block">
+                        {key === 'old' ? 'รหัสผ่านเดิม' : key === 'new' ? 'รหัสผ่านใหม่' : 'ยืนยันรหัสผ่านใหม่'}
+                      </label>
+                      <input 
+                        type="password" required
+                        value={passForm[key as keyof typeof passForm]}
+                        onChange={(e) => setPassForm({...passForm, [key]: e.target.value})}
+                        className="w-full px-4 py-3 bg-[#0A0F1F] border border-slate-800 rounded-xl text-white text-sm outline-none focus:ring-2 focus:ring-cyan-500/20"
+                        placeholder="••••••"
+                      />
+                    </div>
+                  ))}
+                  <button type="submit" disabled={passLoading} className="w-full py-3.5 mt-2 text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold shadow-lg flex justify-center items-center gap-2 text-sm transition-all">
+                      {passLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <Lock className="w-4 h-4"/>} อัปเดตรหัสผ่าน
+                  </button>
+              </form>
+            )}
+
           </div>
         </div>
       )}
 
-      {/* --- Quiz History Modal (UPDATED WITH EXPANDABLE DETAILS) --- */}
+      {/* --- Quiz History Modal --- */}
       {showHistoryModal && (
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistoryModal(false)}></div>
@@ -641,12 +703,12 @@ export default function Dashboard() {
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
             <div className="flex justify-between items-center mb-6 shrink-0">
                 <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-                    <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบของฉัน
+                    <History className="w-5 h-5 text-indigo-400" /> ประวัติการสอบ
                 </h3>
                 <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5"/></button>
             </div>
             
-            <div className="overflow-y-auto pr-2 space-y-4 custom-scrollbar flex-1">
+            <div className="overflow-y-auto pr-1 space-y-3 custom-scrollbar flex-1">
               {historyLoading ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
               ) : quizHistory.length === 0 ? (
@@ -658,30 +720,29 @@ export default function Dashboard() {
                 quizHistory.map((attempt, index) => (
                   <div key={attempt.id} className="bg-[#1E293B] border border-slate-700 hover:border-slate-600 rounded-2xl flex flex-col overflow-hidden transition-all duration-300 shadow-lg">
                     
-                    {/* --- Header Summary (Clickable to Expand) --- */}
                     <div 
                       onClick={() => handleToggleDetails(attempt.id, attempt.details)}
                       className="p-4 md:p-5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/30 transition-colors"
                     >
                       <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
-                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center text-xs md:text-base font-bold shrink-0 shadow-inner
-                          ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}
+                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold shrink-0
+                          ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}
                         `}>
                           #{quizHistory.length - index}
                         </div>
                         <div className="min-w-0">
-                          <div className="text-white font-black text-base md:text-xl flex items-center gap-2 truncate">
-                            {attempt.score} <span className="text-xs md:text-sm text-slate-500 font-medium">/ {attempt.total_score}</span>
+                          <div className="text-white font-bold text-sm md:text-lg flex items-center gap-2 truncate">
+                            {attempt.score} <span className="text-[10px] md:text-sm text-slate-500 font-normal">/ {attempt.total_score}</span>
                           </div>
-                          <div className="text-[10px] md:text-xs text-slate-400 flex flex-wrap items-center gap-3 mt-1.5">
-                            <span className="flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> {formatDate(attempt.created_at)}</span>
-                            <span className="flex items-center gap-1"><Activity className="w-3.5 h-3.5" /> {formatTime(attempt.time_spent_seconds)}</span>
+                          <div className="text-[9px] md:text-xs text-slate-500 flex flex-wrap items-center gap-2 mt-1">
+                            <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {formatDate(attempt.created_at)}</span>
+                            <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {formatTime(attempt.time_spent_seconds)}</span>
                           </div>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-3 md:gap-4 shrink-0">
-                        <div className={`px-3 py-1.5 rounded-lg text-[10px] md:text-xs font-bold
+                        <div className={`px-2 md:px-3 py-1 rounded-lg text-[9px] md:text-xs font-bold shrink-0
                           ${attempt.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
                         `}>
                           {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
@@ -692,7 +753,6 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* --- Expandable Details Area (รายข้อ - ซ่อนเฉลย) --- */}
                     <div 
                       className={`grid transition-all duration-300 ease-in-out ${
                         expandedAttemptId === attempt.id ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -708,9 +768,8 @@ export default function Dashboard() {
                           ) : attemptDetails[attempt.id] && attemptDetails[attempt.id].length > 0 ? (
                              <div>
                                 <h4 className="text-[10px] md:text-xs font-bold text-slate-300 mb-3 md:mb-4 uppercase tracking-wider flex items-center gap-2">
-                                   <BarChart3 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-400"/> สรุปผลรายข้อ
+                                   <BarChart3 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-400"/> สรุปผลรายข้อ <span className="text-slate-500 font-normal">(ซ่อนเฉลย)</span>
                                 </h4>
-                                {/* Grid Responsive: มือถือ 5 คอลัมน์ / แท็บเล็ต 8 / คอม 10 */}
                                 <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 md:gap-3">
                                    {attemptDetails[attempt.id].map((log, i) => (
                                       <div key={i} className={`flex flex-col items-center justify-center py-2 md:py-3 rounded-xl border transition-all hover:scale-105

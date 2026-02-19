@@ -27,6 +27,12 @@ class UserRegister(BaseModel):
     last_name: str
     class_room: str
 
+# [NEW] Schema สำหรับอัปเดตโปรไฟล์
+class ProfileUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    class_room: Optional[str] = None
+
 # --- Internal Functions ---
 def create_access_token_local(data: dict, expires_delta: Optional[timedelta] = None):
     """ใช้ SECRET_KEY เดียวกับทั้งระบบ"""
@@ -110,6 +116,31 @@ def login(
         "token_type": "bearer",
         "role": user.role
     }
+
+# [NEW] Endpoint ดึงข้อมูลตัวเอง
+@router.get("/me")
+def get_my_profile(current_user: User = Depends(get_current_user)):
+    return {
+        "email": current_user.email,
+        "student_id": current_user.student_id,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+        "class_room": current_user.class_room
+    }
+
+# [NEW] Endpoint อัปเดตข้อมูลตัวเอง
+@router.patch("/profile")
+def update_my_profile(
+    profile_data: ProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if profile_data.first_name: current_user.first_name = profile_data.first_name
+    if profile_data.last_name: current_user.last_name = profile_data.last_name
+    if profile_data.class_room: current_user.class_room = profile_data.class_room
+    
+    db.commit()
+    return {"message": "อัปเดตข้อมูลสำเร็จ"}
 
 @router.post("/reset-password/{student_id}")
 def reset_student_password(
