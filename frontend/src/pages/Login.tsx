@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { Lock, Mail, Loader2, ArrowRight, Cpu, Zap, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, Loader2, ArrowRight, Cpu, Zap, Eye, EyeOff, BookOpen } from 'lucide-react'; // [NEW] Import BookOpen
 import { AxiosError } from 'axios';
+import UserManualModal from '../components/UserManualModal'; // [NEW] Import Modal
 
 export default function Login() {
   const navigate = useNavigate();
@@ -11,6 +12,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // [NEW] State for Manual Modal
+  const [showManual, setShowManual] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,15 +30,13 @@ export default function Login() {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
-      // เก็บ Token และ Role ลงเครื่อง
       localStorage.setItem('token', res.data.access_token);
-      localStorage.setItem('role', res.data.role); // เก็บ role ไว้ใช้ประโยชน์อื่นได้
+      localStorage.setItem('role', res.data.role);
 
-      // ✅ [FIX] ตรวจสอบ Role เพื่อเปลี่ยนเส้นทาง
       if (res.data.role === 'teacher') {
-        navigate('/teacher/dashboard'); // ไปหน้าครู
+        navigate('/teacher/dashboard');
       } else {
-        navigate('/dashboard'); // ไปหน้าเด็ก
+        navigate('/dashboard');
       }
       
     } catch (err) {
@@ -75,15 +77,20 @@ export default function Login() {
           border-color: #3b82f6;
           box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
         }
+        /* Custom Scrollbar for Modal */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
       `}</style>
 
       {/* --- BACKGROUND LAYERS --- */}
       <div className="absolute inset-0 bg-circuit z-0 pointer-events-none"></div>
-      <div className="absolute top-[-10%] left-[-10%] w-[800px] h-[800px] bg-blue-600/20 blur-[120px] rounded-full mix-blend-screen animate-pulse duration-[8s]"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-500/10 blur-[100px] rounded-full mix-blend-screen"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-200 h-200 bg-blue-600/20 blur-[120px] rounded-full mix-blend-screen animate-pulse duration-[8s]"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-150 h-150 bg-indigo-500/10 blur-[100px] rounded-full mix-blend-screen"></div>
 
       {/* --- MAIN CONTENT CONTAINER --- */}
-      <div className="relative z-10 w-full max-w-[1200px] flex flex-col lg:flex-row items-center justify-between p-6 lg:p-12 gap-12 lg:gap-20">
+      <div className="relative z-10 w-full max-w-300 flex flex-col lg:flex-row items-center justify-between p-6 lg:p-12 gap-12 lg:gap-20">
         
         {/* LEFT SIDE */}
         <div className="w-full lg:w-1/2 text-white space-y-8 animate-in fade-in slide-in-from-left-4 duration-700 hidden lg:block">
@@ -94,7 +101,7 @@ export default function Login() {
 
           <div className="space-y-4">
              <h1 className="text-5xl lg:text-7xl font-bold leading-[1.1] tracking-tight">
-               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-200 to-indigo-200">Engineering</span> <br/>
+               <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-200 to-indigo-200">Engineering</span> <br/>
                Intelligence.
              </h1>
              <p className="text-slate-400 text-lg lg:text-xl font-light leading-relaxed max-w-lg">
@@ -126,8 +133,8 @@ export default function Login() {
         </div>
 
         {/* RIGHT SIDE (Login Form) */}
-        <div className="w-full lg:w-[480px]">
-          <div className="glass-panel p-8 md:p-10 rounded-[2rem] w-full min-h-[633px] flex flex-col justify-center animate-in zoom-in-95 duration-500 delay-150">
+        <div className="w-full lg:w-120">
+          <div className="glass-panel p-8 md:p-10 rounded-4xl w-full min-h-158.25 flex flex-col justify-center animate-in zoom-in-95 duration-500 delay-150">
             
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-2">เข้าสู่ระบบ</h2>
@@ -177,14 +184,13 @@ export default function Login() {
                     <Lock className="h-5 w-5 text-slate-500 group-focus-within:text-blue-400 transition-colors" />
                   </div>
                   <input
-                    type={showPassword ? "text" : "password"} // Toggle Type
+                    type={showPassword ? "text" : "password"}
                     required
                     className="w-full pl-11 pr-10 py-3.5 rounded-xl input-dark focus:outline-none transition-all duration-300 placeholder-slate-500"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
-                  {/* Eye Toggle Button */}
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -199,11 +205,11 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-4 mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-semibold text-sm transition-all duration-300 
+                className="w-full py-4 mt-2 bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-semibold text-sm transition-all duration-300 
                            shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:-translate-y-1 active:scale-[0.98] 
                            disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 group relative overflow-hidden"
               >
-                <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]"></div>
+                <div className="absolute inset-0 w-full h-full bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]"></div>
                 
                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
                   <>
@@ -214,7 +220,7 @@ export default function Login() {
               </button>
             </form>
 
-            <div className="pt-6 mt-6 border-t border-white/5 text-center">
+            <div className="pt-6 mt-6 border-t border-white/5 text-center flex flex-col gap-3">
               <p className="text-slate-500 text-sm">
                 ยังไม่มีบัญชี?{' '}
                 <button 
@@ -224,11 +230,23 @@ export default function Login() {
                   สมัครสมาชิกใหม่ <ArrowRight className="w-3 h-3" />
                 </button>
               </p>
+
+              {/* [NEW] ปุ่มคู่มือการใช้งาน */}
+              <button 
+                onClick={() => setShowManual(true)}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors inline-flex items-center justify-center gap-1.5 mt-2"
+              >
+                <BookOpen className="w-3 h-3" /> คู่มือการใช้งานสำหรับนักเรียน
+              </button>
             </div>
 
           </div>
         </div>
       </div>
+
+      {/* [NEW] เรียกใช้ Modal */}
+      <UserManualModal isOpen={showManual} onClose={() => setShowManual(false)} />
+
     </div>
   );
 }
