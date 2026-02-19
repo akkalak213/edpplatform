@@ -1,3 +1,4 @@
+# ไฟล์: backend/app/routers/quiz.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -86,23 +87,61 @@ def submit_quiz(
         "details": log
     }
 
+# -------------------------------------------------------------------
+# ✅ [FIXED 1] แปลง answers_log ให้ชื่อว่า details ตอนส่งกลับไปหน้าบ้าน
+# -------------------------------------------------------------------
 @router.get("/history")
 def get_quiz_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    attempts = db.query(QuizAttempt).filter(QuizAttempt.student_id == current_user.id).order_by(QuizAttempt.created_at.desc()).all()
-    return attempts
+    attempts = db.query(QuizAttempt).filter(
+        QuizAttempt.student_id == current_user.id
+    ).order_by(QuizAttempt.created_at.desc()).all()
+    
+    history_list = []
+    for att in attempts:
+        history_list.append({
+            "id": att.id,
+            "score": att.score,
+            "total_score": att.total_score,
+            "passed": att.passed,
+            "time_spent_seconds": att.time_spent_seconds,
+            "created_at": att.created_at,
+            "details": att.answers_log or []  # แปลงเป็นคำว่า details ให้หน้าบ้านรู้จัก
+        })
+    return history_list
+
+# -------------------------------------------------------------------
+# ✅ [FIXED 2] สร้าง Endpoint สำรอง เผื่อหน้าบ้านต้องการยิงมาเอาเฉพาะรายข้อ
+# -------------------------------------------------------------------
+@router.get("/history/{attempt_id}")
+def get_quiz_attempt_details(
+    attempt_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    attempt = db.query(QuizAttempt).filter(
+        QuizAttempt.id == attempt_id, 
+        QuizAttempt.student_id == current_user.id
+    ).first()
+    
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+        
+    return {
+        "id": attempt.id,
+        "details": attempt.answers_log or []
+    }
+
 
 @router.get("/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
-    # Query: Join ตาราง QuizAttempt กับ User เพื่อเอาชื่อนักเรียน
-    # Order by: Score (Desc), Time (Asc), CreatedAt (Asc)
     results = db.query(QuizAttempt, User).join(User, QuizAttempt.student_id == User.id).order_by(
         QuizAttempt.score.desc(),
         QuizAttempt.time_spent_seconds.asc(),
         QuizAttempt.created_at.asc()
-    ).limit(20).all() # เอาแค่ Top 20 คนเก่ง
+    ).limit(20).all()
 
     leaderboard = []
     for attempt, user in results:
@@ -121,7 +160,6 @@ def get_leaderboard(db: Session = Depends(get_db)):
 
 @router.get("/analytics/overview")
 def get_quiz_overview(db: Session = Depends(get_db)):
-    """สรุปภาพรวมทั้งหมดของการสอบ"""
     total_attempts = db.query(QuizAttempt).count()
     if total_attempts == 0:
         return {"total_attempts": 0, "average_score": 0, "pass_rate": 0, "max_score": 0}
@@ -140,32 +178,25 @@ def get_quiz_overview(db: Session = Depends(get_db)):
 
 @router.get("/analytics/items")
 def get_item_analysis(db: Session = Depends(get_db)):
-    """วิเคราะห์รายข้อ: ข้อไหนคนถูกเยอะ/ผิดเยอะ"""
     attempts = db.query(QuizAttempt).all()
     questions = db.query(QuizQuestion).order_by(QuizQuestion.order).all()
     
-    # เตรียมโครงสร้างข้อมูล
     analysis = {q.id: {"text": q.question_text, "correct": 0, "total": 0, "category": q.category, "order": q.order} for q in questions}
 
-    # วนลูปนับคะแนน (อาจช้าถ้านักเรียนเป็นหมื่นคน แต่ระดับโรงเรียนไหวสบายครับ)
     for attempt in attempts:
         if not attempt.answers_log: continue
         for log in attempt.answers_log:
-            # log format: {'question_id': 1, 'is_correct': True, ...}
-            # บางที json เก็บมาเป็น dict หรือ object
             if isinstance(log, dict):
                 q_id = log.get('question_id')
                 is_correct = log.get('is_correct')
             else:
-                # กรณีเก่าเก็บแปลกๆ (กันเหนียว)
                 continue
-            
+
             if q_id in analysis:
                 analysis[q_id]['total'] += 1
                 if is_correct:
                     analysis[q_id]['correct'] += 1
     
-    # แปลงเป็น List เพื่อส่งกลับ
     result = []
     for q_id, data in analysis.items():
         percent = (data['correct'] / data['total'] * 100) if data['total'] > 0 else 0
@@ -179,12 +210,10 @@ def get_item_analysis(db: Session = Depends(get_db)):
             "accuracy_percent": round(percent, 2)
         })
     
-    # เรียงตามข้อที่คนทำผิดเยอะที่สุด (Accuracy น้อยสุดขึ้นก่อน)
     return sorted(result, key=lambda x: x['accuracy_percent'])
 
 @router.get("/analytics/students")
 def get_student_analytics(db: Session = Depends(get_db)):
-    """สรุปรายชื่อนักเรียนพร้อมสถิติการสอบของแต่ละคน"""
     attempts = db.query(QuizAttempt, User).join(User).all()
     student_map = {}
 
@@ -208,11 +237,9 @@ def get_student_analytics(db: Session = Depends(get_db)):
         s['attempts_count'] += 1
         s['total_score_sum'] += att.score
         
-        # หา Best Score
         if att.score > s['best_score']:
             s['best_score'] = att.score
         
-        # หา Latest Score
         if att.created_at >= s['latest_attempt_at']:
              s['latest_score'] = att.score
              s['latest_attempt_at'] = att.created_at
@@ -223,7 +250,6 @@ def get_student_analytics(db: Session = Depends(get_db)):
         del s['total_score_sum']
         results.append(s)
     
-    # เรียงตามเลขประจำตัว
     return sorted(results, key=lambda x: x['student_id'])
 
 @router.delete("/reset")
@@ -231,8 +257,6 @@ def reset_quiz_data(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    """ล้างข้อมูลการสอบทั้งหมด (สำหรับครู)"""
-    # [FIX] ตรวจสอบสิทธิ์ว่าเป็นครูเท่านั้น
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied: Teachers only")
 
