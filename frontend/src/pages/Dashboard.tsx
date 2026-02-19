@@ -33,11 +33,35 @@ interface LeaderboardItem {
   submitted_at: string;
 }
 
+// --- Skeleton Components ---
+const ProjectSkeleton = () => (
+  <div className="glass-tech rounded-3xl md:rounded-4xl p-5 md:p-6 border border-slate-700/50 relative overflow-hidden">
+    <div className="animate-pulse space-y-4">
+      <div className="flex justify-between items-start">
+        <div className="h-5 w-20 bg-slate-700/50 rounded-full"></div>
+        <div className="h-8 w-8 bg-slate-700/50 rounded-lg"></div>
+      </div>
+      <div className="space-y-2 pt-2">
+        <div className="h-7 w-3/4 bg-slate-700/50 rounded-lg"></div>
+        <div className="h-4 w-full bg-slate-700/30 rounded-lg"></div>
+        <div className="h-4 w-2/3 bg-slate-700/30 rounded-lg"></div>
+      </div>
+      <div className="pt-4 border-t border-slate-700/30 flex justify-between items-center">
+        <div className="h-4 w-24 bg-slate-700/50 rounded-full"></div>
+        <div className="h-4 w-16 bg-slate-700/50 rounded-full"></div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Loading State (สำคัญมากสำหรับการแก้ปัญหาโหลดช้า/กระตุก)
+  const [isLoading, setIsLoading] = useState(true);
+
   // Toast State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; isVisible: boolean }>({ 
     message: '', type: 'success', isVisible: false 
@@ -70,8 +94,13 @@ export default function Dashboard() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
-    fetchProjects();
-    fetchLeaderboard();
+    // โหลดข้อมูลพร้อมกันและจัดการ Loading state ให้เนียน
+    const initData = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchProjects(), fetchLeaderboard()]);
+      setIsLoading(false);
+    };
+    initData();
   }, []);
 
   // Toast Helper
@@ -108,7 +137,7 @@ export default function Dashboard() {
       const res = await client.get('/quiz/leaderboard');
       setLeaderboardData(res.data);
       if (res.data.length > 0) {
-        setShowLeaderboard(true);
+        // setShowLeaderboard(true); // ปิดไว้ก่อน ให้ผู้ใช้กดเปิดเองจะได้ไม่รก
       }
     } catch (err) {
       console.error("Failed to fetch leaderboard", err);
@@ -134,7 +163,7 @@ export default function Dashboard() {
       setShowCreateModal(false);
       setTitle('');
       setDesc('');
-      fetchProjects();
+      await fetchProjects(); // รอโหลดข้อมูลใหม่เสร็จค่อยแจ้งเตือน
       showToast("สร้างโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
       console.error("Create error:", err);
@@ -157,13 +186,12 @@ export default function Dashboard() {
     setDeleteError('');
     try {
       await client.delete(`/edp/projects/${projectToDelete}`);
-      setProjects(projects.filter(p => p.id !== projectToDelete));
+      setProjects(prev => prev.filter(p => p.id !== projectToDelete)); // Optimistic update (ลบออกจากหน้าจอทันทีไม่ต้องรอโหลดใหม่)
       setShowDeleteModal(false);
       showToast("ลบโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
       console.error("Delete failed:", err);
       setDeleteError("เกิดข้อผิดพลาด: ไม่สามารถลบข้อมูลได้ในขณะนี้");
-      // Optional: show toast as well if needed
     } finally {
       setIsDeleting(false);
     }
@@ -290,6 +318,14 @@ export default function Dashboard() {
               </button>
 
               <button
+                onClick={() => { setShowLeaderboard(true); fetchLeaderboard(); }}
+                className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-all shrink-0"
+                title="อันดับคะแนน"
+              >
+                <Trophy className="w-5 h-5" />
+              </button>
+
+              <button
                 onClick={() => navigate('/student/quiz')}
                 className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-3 md:px-4 py-2 md:py-2.5 rounded-xl transition-all flex items-center gap-2 shrink-0 text-sm font-bold"
               >
@@ -352,68 +388,77 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-            {filteredProjects.map((project) => (
-              <div 
-                key={project.id}
-                onClick={() => navigate(`/project/${project.id}`)}
-                className="group relative glass-tech glass-tech-hover rounded-3xl md:rounded-4xl p-5 md:p-6 cursor-pointer transition-all duration-500 overflow-hidden"
-              >
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                  <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl md:rounded-4xl blur-md"></div>
-                </div>
-
-                <div className="flex justify-between items-start mb-4 md:mb-5 relative z-10">
-                  <div className="text-[9px] md:text-[10px] text-cyan-300/70 bg-cyan-950/30 border border-cyan-900/50 px-2 md:px-3 py-1 rounded-full uppercase tracking-wider font-medium">
-                    รหัส :: {String(project.id).padStart(4, '0')}
-                  </div>
-                  
-                  <button 
-                    onClick={(e) => clickDeleteProject(e, project.id)}
-                    className="p-1.5 md:p-2 text-slate-600 hover:text-red-400 bg-slate-900/50 hover:bg-red-950/30 rounded-lg md:rounded-xl border border-transparent hover:border-red-900/50 transition-all opacity-100 sm:opacity-60 sm:group-hover:opacity-100 z-20"
-                    title="ลบโครงงาน"
+            {/* 1. แสดง Skeleton ขณะโหลด */}
+            {isLoading ? (
+              Array(6).fill(0).map((_, i) => <ProjectSkeleton key={i} />)
+            ) : (
+              /* 2. แสดงข้อมูลจริงเมื่อโหลดเสร็จ */
+              <>
+                {filteredProjects.map((project) => (
+                  <div 
+                    key={project.id}
+                    onClick={() => navigate(`/project/${project.id}`)}
+                    className="group relative glass-tech glass-tech-hover rounded-3xl md:rounded-4xl p-5 md:p-6 cursor-pointer transition-all duration-500 overflow-hidden animate-in fade-in zoom-in-95 duration-300"
                   >
-                    <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  </button>
-                </div>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+                      <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl md:rounded-4xl blur-md"></div>
+                    </div>
 
-                <div className="relative z-10 pl-1 md:pl-2">
-                  <h3 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3 truncate group-hover:text-cyan-300 transition-colors">
-                    {project.title}
-                  </h3>
-                  <div className="relative">
-                    <div className="absolute -left-3 top-1 bottom-1 w-0.5 bg-slate-800 group-hover:bg-cyan-700/50 transition-colors"></div>
-                    <p className="text-slate-400 text-xs md:text-sm leading-relaxed line-clamp-2 pl-2 font-light">
-                        {project.description || "ไม่มีรายละเอียดสังเขป"}
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex justify-between items-start mb-4 md:mb-5 relative z-10">
+                      <div className="text-[9px] md:text-[10px] text-cyan-300/70 bg-cyan-950/30 border border-cyan-900/50 px-2 md:px-3 py-1 rounded-full uppercase tracking-wider font-medium">
+                        รหัส :: {String(project.id).padStart(4, '0')}
+                      </div>
+                      
+                      <button 
+                        onClick={(e) => clickDeleteProject(e, project.id)}
+                        className="p-1.5 md:p-2 text-slate-600 hover:text-red-400 bg-slate-900/50 hover:bg-red-950/30 rounded-lg md:rounded-xl border border-transparent hover:border-red-900/50 transition-all opacity-100 sm:opacity-60 sm:group-hover:opacity-100 z-20"
+                        title="ลบโครงงาน"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      </button>
+                    </div>
 
-                <div className="mt-6 md:mt-8 pt-4 border-t border-slate-800/50 flex items-center justify-between relative z-10">
-                  <div className="flex items-center gap-2">
-                      <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-500 group-hover:text-cyan-500 transition-colors" />
-                      <span className="text-[9px] md:text-[10px] text-slate-500 font-medium">
-                        {formatDate(project.created_at)}
-                      </span>
-                  </div>
-                  <div className="text-cyan-500 opacity-100 sm:opacity-0 sm:-translate-x-4 sm:group-hover:opacity-100 sm:group-hover:translate-x-0 transition-all duration-300 flex items-center gap-1 text-[10px] md:text-xs font-medium tracking-wider">
-                    เปิด <CornerDownRight className="w-3 h-3 md:w-4 md:h-4" />
-                  </div>
-                </div>
-              </div>
-            ))}
+                    <div className="relative z-10 pl-1 md:pl-2">
+                      <h3 className="text-xl md:text-2xl font-bold text-white mb-2 md:mb-3 truncate group-hover:text-cyan-300 transition-colors">
+                        {project.title}
+                      </h3>
+                      <div className="relative">
+                        <div className="absolute -left-3 top-1 bottom-1 w-0.5 bg-slate-800 group-hover:bg-cyan-700/50 transition-colors"></div>
+                        <p className="text-slate-400 text-xs md:text-sm leading-relaxed line-clamp-2 pl-2 font-light">
+                            {project.description || "ไม่มีรายละเอียดสังเขป"}
+                        </p>
+                      </div>
+                    </div>
 
-            {filteredProjects.length === 0 && (
-              <div
-                onClick={() => setShowCreateModal(true)}
-                className="group col-span-full h-48 md:h-75 glass-tech rounded-3xl md:rounded-4xl border-dashed border-2 border-slate-800/80 hover:border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                 <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-900/80 rounded-full flex items-center justify-center mb-4 md:mb-6 border border-slate-800 group-hover:border-cyan-500/50 transition-all relative z-10">
-                   <Plus className="w-8 h-8 md:w-10 md:h-10 text-slate-600 group-hover:text-cyan-400" />
-                 </div>
-                 <h3 className="text-lg md:text-xl font-bold text-slate-300 group-hover:text-white relative z-10">พื้นที่ว่าง</h3>
-                 <p className="text-slate-500 text-xs md:text-sm mt-2 relative z-10 font-light px-4 text-center">คลิกเพื่อเริ่มต้นสร้างโครงงานใหม่</p>
-              </div>
+                    <div className="mt-6 md:mt-8 pt-4 border-t border-slate-800/50 flex items-center justify-between relative z-10">
+                      <div className="flex items-center gap-2">
+                          <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-500 group-hover:text-cyan-500 transition-colors" />
+                          <span className="text-[9px] md:text-[10px] text-slate-500 font-medium">
+                            {formatDate(project.created_at)}
+                          </span>
+                      </div>
+                      <div className="text-cyan-500 opacity-100 sm:opacity-0 sm:-translate-x-4 sm:group-hover:opacity-100 sm:group-hover:translate-x-0 transition-all duration-300 flex items-center gap-1 text-[10px] md:text-xs font-medium tracking-wider">
+                        เปิด <CornerDownRight className="w-3 h-3 md:w-4 md:h-4" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* 3. Empty State (ถ้าไม่มีข้อมูล) */}
+                {filteredProjects.length === 0 && (
+                  <div
+                    onClick={() => setShowCreateModal(true)}
+                    className="group col-span-full h-48 md:h-75 glass-tech rounded-3xl md:rounded-4xl border-dashed border-2 border-slate-800/80 hover:border-cyan-500/30 flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                     <div className="w-16 h-16 md:w-24 md:h-24 bg-slate-900/80 rounded-full flex items-center justify-center mb-4 md:mb-6 border border-slate-800 group-hover:border-cyan-500/50 transition-all relative z-10">
+                       <Plus className="w-8 h-8 md:w-10 md:h-10 text-slate-600 group-hover:text-cyan-400" />
+                     </div>
+                     <h3 className="text-lg md:text-xl font-bold text-slate-300 group-hover:text-white relative z-10">พื้นที่ว่าง</h3>
+                     <p className="text-slate-500 text-xs md:text-sm mt-2 relative z-10 font-light px-4 text-center">คลิกเพื่อเริ่มต้นสร้างโครงงานใหม่</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </main>
