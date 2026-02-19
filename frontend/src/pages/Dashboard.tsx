@@ -708,7 +708,7 @@ export default function Dashboard() {
                           ) : attemptDetails[attempt.id] && attemptDetails[attempt.id].length > 0 ? (
                              <div>
                                 <h4 className="text-[10px] md:text-xs font-bold text-slate-300 mb-3 md:mb-4 uppercase tracking-wider flex items-center gap-2">
-                                   <BarChart3 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-400"/> สรุปผลรายข้อ <span className="text-slate-500 font-normal">(ซ่อนเฉลย)</span>
+                                   <BarChart3 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-400"/> สรุปผลรายข้อ
                                 </h4>
                                 {/* Grid Responsive: มือถือ 5 คอลัมน์ / แท็บเล็ต 8 / คอม 10 */}
                                 <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 md:gap-3">
