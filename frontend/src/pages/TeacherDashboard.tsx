@@ -553,8 +553,7 @@ export default function TeacherDashboard() {
 
         </div>
       </main>
-
-      {/* Edit Modal (Student Info) */}
+{/* Edit Modal (Student Info) */}
       {editingStudent && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6">
           <div className="bg-[#1E293B] p-6 sm:p-10 rounded-4xl sm:rounded-[2.5rem] border border-slate-700 w-full max-w-md shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
@@ -565,7 +564,21 @@ export default function TeacherDashboard() {
                 <input placeholder="นามสกุล" value={editForm.last_name} onChange={e => setEditForm({...editForm, last_name: e.target.value})} className="bg-[#0F172A] border border-slate-700 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-white outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm sm:text-base"/>
               </div>
               <input placeholder="รหัสนักเรียน" value={editForm.student_id} onChange={e => setEditForm({...editForm, student_id: e.target.value})} className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-white outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm sm:text-base"/>
-              <input placeholder="ห้องเรียน" value={editForm.class_room} onChange={e => setEditForm({...editForm, class_room: e.target.value})} className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-white outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm sm:text-base"/>
+              
+              {/* ✅ เปลี่ยนส่วนนี้เป็น Dropdown */}
+              <select 
+                value={editForm.class_room} 
+                onChange={e => setEditForm({...editForm, class_room: e.target.value})} 
+                className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl px-4 sm:px-5 py-3 sm:py-3.5 text-white outline-none focus:ring-2 focus:ring-indigo-600 transition-all text-sm sm:text-base appearance-none cursor-pointer"
+              >
+                <option value="" disabled>เลือกห้องเรียน</option>
+                <option value="ม.4/1">ม.4/1</option>
+                <option value="ม.4/2">ม.4/2</option>
+                <option value="ม.4/3">ม.4/3</option>
+                <option value="ม.4/4">ม.4/4</option>
+                <option value="ม.4/5">ม.4/5</option>
+              </select>
+              
             </div>
             <div className="flex gap-4 mt-8 sm:mt-10">
               <button onClick={() => setEditingStudent(null)} className="flex-1 px-4 py-3 sm:py-4 text-slate-400 font-bold hover:text-white transition-all text-sm sm:text-base">ยกเลิก</button>
@@ -580,7 +593,6 @@ export default function TeacherDashboard() {
           </div>
         </div>
       )}
-
       {/* Custom Confirm Modal */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">

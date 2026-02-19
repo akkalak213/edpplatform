@@ -239,7 +239,7 @@ export default function Dashboard() {
         });
         showToast("อัปเดตข้อมูลสำเร็จ!", 'success');
     } catch (err) {
-        console.error("Update profile error:", err); // [FIXED] ใช้ตัวแปร err เพื่อแก้ ESLint warning
+        console.error("Update profile error:", err);
         showToast("อัปเดตข้อมูลไม่สำเร็จ", 'error');
     } finally {
         setProfileLoading(false);
@@ -659,6 +659,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* ✅ เปลี่ยนเป็น Dropdown แล้ว */}
                 <div>
                   <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">ห้องเรียน</label>
                   <select 
@@ -711,7 +712,7 @@ export default function Dashboard() {
       {showHistoryModal && (
         <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowHistoryModal(false)}></div>
-          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-3xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-2xl p-5 md:p-8 shadow-2xl animate-modal-pop border-indigo-500/20 flex flex-col max-h-[85vh]">
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-indigo-500 to-purple-500"></div>
             <div className="flex justify-between items-center mb-6 shrink-0">
                 <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
@@ -719,7 +720,6 @@ export default function Dashboard() {
                 </h3>
                 <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5"/></button>
             </div>
-            
             <div className="overflow-y-auto pr-1 space-y-3 custom-scrollbar flex-1">
               {historyLoading ? (
                 <div className="flex justify-center py-10"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
@@ -740,7 +740,7 @@ export default function Dashboard() {
                         <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-xs md:text-sm font-bold shrink-0
                           ${attempt.passed ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}
                         `}>
-                          #{quizHistory.length - index}
+                          {quizHistory.length - index}
                         </div>
                         <div className="min-w-0">
                           <div className="text-white font-bold text-sm md:text-lg flex items-center gap-2 truncate">
