@@ -5,6 +5,7 @@ import {
   LogOut, Plus, X, Loader2, Trash2, Cpu, Activity, CornerDownRight, 
   Layers, Search, CalendarClock, AlertTriangle, Key, Lock, Trophy, History, Medal, Crown 
 } from 'lucide-react';
+import Toast from '../components/Toast';
 
 // --- Interfaces ---
 interface Project {
@@ -37,6 +38,11 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Toast State
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; isVisible: boolean }>({ 
+    message: '', type: 'success', isVisible: false 
+  });
+
   // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [title, setTitle] = useState('');
@@ -60,10 +66,18 @@ export default function Dashboard() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
+  // Logout Confirmation State
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
   useEffect(() => {
     fetchProjects();
     fetchLeaderboard();
   }, []);
+
+  // Toast Helper
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type, isVisible: true });
+  };
 
   const fetchProjects = async () => {
     try {
@@ -82,7 +96,7 @@ export default function Dashboard() {
       setShowHistoryModal(true);
     } catch (err) {
       console.error("Failed to fetch history", err);
-      alert("ไม่สามารถดึงข้อมูลประวัติการสอบได้");
+      showToast("ไม่สามารถดึงข้อมูลประวัติการสอบได้", 'error');
     } finally {
       setHistoryLoading(false);
     }
@@ -103,7 +117,11 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
     localStorage.removeItem('token');
     navigate('/login');
   };
@@ -117,8 +135,10 @@ export default function Dashboard() {
       setTitle('');
       setDesc('');
       fetchProjects();
+      showToast("สร้างโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
       console.error("Create error:", err);
+      showToast("เกิดข้อผิดพลาดในการสร้างโครงงาน", 'error');
     } finally {
       setCreateLoading(false);
     }
@@ -139,9 +159,11 @@ export default function Dashboard() {
       await client.delete(`/edp/projects/${projectToDelete}`);
       setProjects(projects.filter(p => p.id !== projectToDelete));
       setShowDeleteModal(false);
+      showToast("ลบโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
       console.error("Delete failed:", err);
       setDeleteError("เกิดข้อผิดพลาด: ไม่สามารถลบข้อมูลได้ในขณะนี้");
+      // Optional: show toast as well if needed
     } finally {
       setIsDeleting(false);
     }
@@ -150,7 +172,7 @@ export default function Dashboard() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passForm.new !== passForm.confirm) {
-        alert("รหัสผ่านใหม่ไม่ตรงกัน");
+        showToast("รหัสผ่านใหม่ไม่ตรงกัน", 'error');
         return;
     }
     setPassLoading(true);
@@ -159,13 +181,13 @@ export default function Dashboard() {
             old_password: passForm.old,
             new_password: passForm.new
         });
-        alert("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!");
+        showToast("เปลี่ยนรหัสผ่านเรียบร้อยแล้ว!", 'success');
         setShowPasswordModal(false);
         setPassForm({ old: '', new: '', confirm: '' });
     } catch (err) {
         const error = err as { response?: { data?: { detail?: string } } };
         const errorMsg = error.response?.data?.detail || "รหัสผ่านเดิมไม่ถูกต้อง";
-        alert("เกิดข้อผิดพลาด: " + errorMsg);
+        showToast("เกิดข้อผิดพลาด: " + errorMsg, 'error');
     } finally {
         setPassLoading(false);
     }
@@ -194,6 +216,15 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-[#020617] text-slate-300 relative overflow-x-hidden selection:bg-cyan-500/20 selection:text-cyan-200">
       
+      {/* Toast Notification */}
+      {toast.isVisible && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} 
+        />
+      )}
+
       {/* --- Ambient Background --- */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M10 10h80v80h-80z' fill='none' stroke='%2338bdf8' stroke-width='0.5'/%3E%3Cpath d='M30 30h40v40h-40z' fill='none' stroke='%2338bdf8' stroke-width='0.5' opacity='0.5'/%3E%3C/svg%3E")`, backgroundSize: '60px 60px' }}></div>
@@ -282,7 +313,7 @@ export default function Dashboard() {
               </button>
 
               <button 
-                onClick={handleLogout}
+                onClick={handleLogoutClick}
                 className="p-2 md:p-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
                 title="ออกจากระบบ"
               >
@@ -463,6 +494,27 @@ export default function Dashboard() {
               <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-2.5 text-slate-400 bg-slate-900 border border-slate-800 rounded-xl text-sm font-medium">ยกเลิก</button>
               <button onClick={confirmDeleteProject} disabled={isDeleting} className="flex-1 py-2.5 text-white bg-red-600 rounded-xl text-sm font-bold shadow-lg shadow-red-500/20">
                  {isDeleting ? <Loader2 className="animate-spin w-4 h-4 mx-auto" /> : 'ยืนยันลบ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Logout Confirmation Modal --- */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 z-110 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#020617]/90 backdrop-blur-sm animate-in fade-in" onClick={() => setShowLogoutModal(false)}></div>
+          <div className="relative glass-tech bg-[#0F172A] rounded-3xl w-full max-w-sm p-6 md:p-8 text-center animate-modal-pop border-red-500/20">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-1 bg-red-500"></div>
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+               <LogOut className="w-8 h-8 text-red-500" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">ยืนยันการออกจากระบบ</h3>
+            <p className="text-slate-400 text-xs md:text-sm mb-6 leading-relaxed px-2">คุณต้องการออกจากระบบใช่หรือไม่?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutModal(false)} className="flex-1 py-2.5 text-slate-400 bg-slate-900 border border-slate-800 rounded-xl text-sm font-medium">ยกเลิก</button>
+              <button onClick={confirmLogout} className="flex-1 py-2.5 text-white bg-red-600 rounded-xl text-sm font-bold shadow-lg shadow-red-500/20">
+                 ออกจากระบบ
               </button>
             </div>
           </div>

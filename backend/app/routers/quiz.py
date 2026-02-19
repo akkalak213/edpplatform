@@ -1,4 +1,3 @@
-# ไฟล์: backend/app/routers/quiz.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -160,7 +159,7 @@ def get_item_analysis(db: Session = Depends(get_db)):
             else:
                 # กรณีเก่าเก็บแปลกๆ (กันเหนียว)
                 continue
-
+            
             if q_id in analysis:
                 analysis[q_id]['total'] += 1
                 if is_correct:
@@ -233,6 +232,10 @@ def reset_quiz_data(
     current_user: User = Depends(get_current_user)
 ):
     """ล้างข้อมูลการสอบทั้งหมด (สำหรับครู)"""
+    # [FIX] ตรวจสอบสิทธิ์ว่าเป็นครูเท่านั้น
+    if current_user.role != 'teacher':
+        raise HTTPException(status_code=403, detail="Access denied: Teachers only")
+
     try:
         db.query(QuizAttempt).delete()
         db.commit()
