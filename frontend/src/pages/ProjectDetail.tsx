@@ -4,8 +4,8 @@ import client from '../api/client';
 import { 
   ArrowLeft, Send, Bot, CheckCircle, Loader2, RefreshCw, 
   ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3, Clock,
-  BookOpen, Lightbulb, X 
-} from 'lucide-react';
+  BookOpen, Lightbulb, X, AlertTriangle 
+} from 'lucide-react'; // [FIX] เพิ่ม AlertTriangle สำหรับแจ้งเตือน
 
 // --- Interfaces ---
 interface ScoreItem {
@@ -26,7 +26,7 @@ interface EdpStep {
   attempt_count?: number;
 }
 
-// [NEW] เนื้อหาความรู้ประจำขั้นตอน (Learning Materials)
+// เนื้อหาความรู้ประจำขั้นตอน (Learning Materials)
 const STEP_CONTENT = {
   1: {
     title: "ระบุปัญหา (Problem Identification)",
@@ -279,6 +279,9 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
+  // [NEW] State สำหรับเก็บข้อความ Error ที่ส่งมาจาก Backend เพื่อแสดงเป็น Banner
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  
   const [animatingStepId, setAnimatingStepId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -336,7 +339,7 @@ export default function ProjectDetail() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [steps, submitting, isProcessComplete]);
+  }, [steps, submitting, isProcessComplete, submitError]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -348,6 +351,7 @@ export default function ProjectDetail() {
     if (!currentInput.trim()) return;
     
     setSubmitting(true);
+    setSubmitError(null); // เคลียร์ error เก่าทุกครั้งก่อนส่ง
     
     const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
@@ -366,9 +370,12 @@ export default function ProjectDetail() {
       
       startTimeRef.current = Date.now();
 
-    } catch (error) {
-      console.error("Submit error:", error);
-      alert("เกิดข้อผิดพลาดในการส่งงาน");
+    } catch (err) {
+      console.error("Submit error:", err);
+      // ใช้ Type Casting กำหนดโครงสร้างข้อมูลแทนการใช้ any
+      const error = err as { response?: { data?: { detail?: string } } };
+      const errorMsg = error.response?.data?.detail || "เกิดข้อผิดพลาดในการส่งงาน กรุณาลองใหม่อีกครั้ง";
+      setSubmitError(errorMsg);
     } finally {
       setSubmitting(false);
     }
@@ -603,7 +610,6 @@ export default function ProjectDetail() {
                 )}
              </div>
              
-             {/* Small Guide Button (Mobile Friendly) */}
              <button 
                onClick={() => setShowContentGuide(true)}
                className="text-[10px] md:text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
@@ -612,6 +618,17 @@ export default function ProjectDetail() {
              </button>
           </div>
 
+          {/* [NEW] แบนเนอร์แจ้งเตือนข้อผิดพลาด (เช่น ส่งข้อความซ้ำ) ที่ดูเนียนไปกับดีไซน์ แทน alert() */}
+          {submitError && (
+            <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 flex items-start gap-3 bg-red-950/50 border border-red-500/30 text-red-200 px-4 py-3 md:px-5 md:py-4 rounded-2xl shadow-lg shadow-red-900/20">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" />
+              <span className="flex-1 text-sm leading-relaxed">{submitError}</span>
+              <button onClick={() => setSubmitError(null)} className="p-1 hover:bg-red-500/20 rounded-lg transition-colors shrink-0">
+                <X className="w-4 h-4 text-red-400 hover:text-white" />
+              </button>
+            </div>
+          )}
+
           <div className="relative group">
             <div className={`absolute -inset-0.5 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500 
               ${isProcessComplete ? 'bg-green-500' : isRevision ? 'bg-red-600' : 'bg-cyan-600'}`}></div>
@@ -619,7 +636,10 @@ export default function ProjectDetail() {
             <div className="relative flex gap-2 bg-[#0F172A] rounded-2xl p-1.5 md:p-2 border border-white/10">
               <textarea
                 value={currentInput}
-                onChange={(e) => setCurrentInput(e.target.value)}
+                onChange={(e) => {
+                  setCurrentInput(e.target.value);
+                  if (submitError) setSubmitError(null); // ซ่อน Error Banner ทันทีที่เริ่มพิมพ์ใหม่
+                }}
                 placeholder={isProcessComplete ? "เริ่มรอบใหม่..." : "พิมพ์เนื้อหา..."}
                 className="flex-1 bg-transparent text-white px-3 py-2 md:px-4 md:py-3 outline-none resize-none placeholder-slate-600 min-h-12.5 md:min-h-15 text-sm md:text-base"
                 rows={1}

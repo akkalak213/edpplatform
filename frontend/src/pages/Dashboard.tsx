@@ -381,7 +381,7 @@ export default function Dashboard() {
                   <div 
                     key={project.id}
                     onClick={() => navigate(`/project/${project.id}`)}
-                    className="group relative glass-tech glass-tech-hover rounded-3xl md:rounded-4xl p-5 md:p-6 cursor-pointer transition-all duration-500 overflow-hidden animate-in fade-in zoom-in-95 duration-300"
+                    className="group relative glass-tech glass-tech-hover rounded-3xl md:rounded-4xl p-5 md:p-6 cursor-pointer transition-all duration-500 overflow-hidden animate-in fade-in zoom-in-95"
                   >
                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
                       <div className="absolute -inset-0.5 bg-linear-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl md:rounded-4xl blur-md"></div>
