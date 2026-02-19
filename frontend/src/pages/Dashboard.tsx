@@ -33,34 +33,13 @@ interface LeaderboardItem {
   submitted_at: string;
 }
 
-// --- Skeleton Components ---
-const ProjectSkeleton = () => (
-  <div className="glass-tech rounded-3xl md:rounded-4xl p-5 md:p-6 border border-slate-700/50 relative overflow-hidden">
-    <div className="animate-pulse space-y-4">
-      <div className="flex justify-between items-start">
-        <div className="h-5 w-20 bg-slate-700/50 rounded-full"></div>
-        <div className="h-8 w-8 bg-slate-700/50 rounded-lg"></div>
-      </div>
-      <div className="space-y-2 pt-2">
-        <div className="h-7 w-3/4 bg-slate-700/50 rounded-lg"></div>
-        <div className="h-4 w-full bg-slate-700/30 rounded-lg"></div>
-        <div className="h-4 w-2/3 bg-slate-700/30 rounded-lg"></div>
-      </div>
-      <div className="pt-4 border-t border-slate-700/30 flex justify-between items-center">
-        <div className="h-4 w-24 bg-slate-700/50 rounded-full"></div>
-        <div className="h-4 w-16 bg-slate-700/50 rounded-full"></div>
-      </div>
-    </div>
-  </div>
-);
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Loading State (สำคัญมากสำหรับการแก้ปัญหาโหลดช้า/กระตุก)
-  const [isLoading, setIsLoading] = useState(true);
+  // Loading State แยกกันเพื่อให้รู้สึกเร็วขึ้น
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
 
   // Toast State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; isVisible: boolean }>({ 
@@ -94,13 +73,11 @@ export default function Dashboard() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
-    // โหลดข้อมูลพร้อมกันและจัดการ Loading state ให้เนียน
-    const initData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchProjects(), fetchLeaderboard()]);
-      setIsLoading(false);
-    };
-    initData();
+    // 1. โหลด Projects ทันที (ไม่ต้องรอ Leaderboard)
+    fetchProjects();
+    
+    // 2. โหลด Leaderboard แยกต่างหาก (Background)
+    fetchLeaderboard();
   }, []);
 
   // Toast Helper
@@ -109,11 +86,14 @@ export default function Dashboard() {
   };
 
   const fetchProjects = async () => {
+    setIsProjectsLoading(true);
     try {
       const res = await client.get('/edp/projects');
       setProjects(res.data);
     } catch (err) {
       console.error("Failed to fetch projects", err);
+    } finally {
+      setIsProjectsLoading(false);
     }
   };
 
@@ -136,8 +116,9 @@ export default function Dashboard() {
     try {
       const res = await client.get('/quiz/leaderboard');
       setLeaderboardData(res.data);
+      // [RESTORED] ถ้ามีข้อมูล ให้เด้ง Popup ขึ้นมาตามที่ขอ
       if (res.data.length > 0) {
-        // setShowLeaderboard(true); // ปิดไว้ก่อน ให้ผู้ใช้กดเปิดเองจะได้ไม่รก
+        setShowLeaderboard(true);
       }
     } catch (err) {
       console.error("Failed to fetch leaderboard", err);
@@ -163,7 +144,7 @@ export default function Dashboard() {
       setShowCreateModal(false);
       setTitle('');
       setDesc('');
-      await fetchProjects(); // รอโหลดข้อมูลใหม่เสร็จค่อยแจ้งเตือน
+      await fetchProjects();
       showToast("สร้างโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
       console.error("Create error:", err);
@@ -186,7 +167,7 @@ export default function Dashboard() {
     setDeleteError('');
     try {
       await client.delete(`/edp/projects/${projectToDelete}`);
-      setProjects(prev => prev.filter(p => p.id !== projectToDelete)); // Optimistic update (ลบออกจากหน้าจอทันทีไม่ต้องรอโหลดใหม่)
+      setProjects(prev => prev.filter(p => p.id !== projectToDelete));
       setShowDeleteModal(false);
       showToast("ลบโครงงานเรียบร้อยแล้ว", 'success');
     } catch (err) {
@@ -388,11 +369,13 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-            {/* 1. แสดง Skeleton ขณะโหลด */}
-            {isLoading ? (
-              Array(6).fill(0).map((_, i) => <ProjectSkeleton key={i} />)
+            {/* [UPDATED] แสดง Spinner หมุนติ้วๆ ตรงกลาง แทน Skeleton กระพริบ */}
+            {isProjectsLoading ? (
+              <div className="col-span-full flex flex-col items-center justify-center py-20 bg-[#1E293B]/30 rounded-3xl border border-slate-700/50 backdrop-blur-sm">
+                <Loader2 className="w-12 h-12 text-cyan-500 animate-spin mb-4" />
+                <p className="text-slate-400 font-medium">กำลังเรียกข้อมูลพื้นที่ทำงาน...</p>
+              </div>
             ) : (
-              /* 2. แสดงข้อมูลจริงเมื่อโหลดเสร็จ */
               <>
                 {filteredProjects.map((project) => (
                   <div 
@@ -444,7 +427,6 @@ export default function Dashboard() {
                   </div>
                 ))}
 
-                {/* 3. Empty State (ถ้าไม่มีข้อมูล) */}
                 {filteredProjects.length === 0 && (
                   <div
                     onClick={() => setShowCreateModal(true)}
