@@ -84,6 +84,8 @@ def get_dashboard_stats(
 
 @router.get("/teacher/students", response_model=List[UserInfo])
 def get_all_students(
+    skip: int = 0, # [ADDED] Pagination: เริ่มต้นที่ 0
+    limit: int = 100, # [ADDED] Pagination: ดึงทีละ 100 คน
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -99,7 +101,10 @@ def get_all_students(
     ).outerjoin(Project, User.id == Project.owner_id)\
      .outerjoin(EdpStep, Project.id == EdpStep.project_id)\
      .filter(User.role == 'student')\
-     .group_by(User.id).all()
+     .group_by(User.id)\
+     .order_by(User.id.desc())\
+     .offset(skip).limit(limit)\
+     .all() # [ADDED] Apply Pagination
     
     response_data = []
     for user, p_count, avg_score in results:
@@ -166,6 +171,8 @@ def get_user_projects(
 
 @router.get("/teacher/projects", response_model=List[ProjectWithStudent])
 def get_all_projects_for_teacher(
+    skip: int = 0, # [ADDED] Pagination
+    limit: int = 100, # [ADDED] Pagination
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -191,7 +198,9 @@ def get_all_projects_for_teacher(
     ).join(User, Project.owner_id == User.id)\
      .outerjoin(latest_step_sub, Project.id == latest_step_sub.c.project_id)\
      .outerjoin(EdpStep, and_(EdpStep.project_id == Project.id, EdpStep.step_number == latest_step_sub.c.max_step))\
-     .all()
+     .order_by(Project.created_at.desc())\
+     .offset(skip).limit(limit)\
+     .all() # [ADDED] Apply Pagination
     
     results = []
     for p, owner, step_num, score, t_score in projects_query:

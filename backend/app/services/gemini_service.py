@@ -3,6 +3,8 @@ import os
 import json
 import re
 import asyncio
+import hashlib  # [ADDED] สำหรับสร้าง Cache Key
+from collections import OrderedDict # [ADDED] สำหรับทำ LRU Cache อย่างง่าย
 from dotenv import load_dotenv
 # นำเข้า Library สำหรับจัดการ Retry และ Error
 from tenacity import retry, stop_after_delay, wait_exponential, retry_if_exception_type, RetryError
@@ -20,18 +22,37 @@ class GeminiService:
             print("Warning: GEMINI_API_KEY not found in .env")
         else:
             genai.configure(api_key=api_key)
+            # [CONFIG] ห้ามเปลี่ยน Model ตามคำสั่ง (ใช้ 2.5 flash ตัวเดิม)
             self.model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # [ADDED] ระบบ Caching (เก็บผลลัพธ์การวิเคราะห์)
+        # ใช้ OrderedDict เพื่อจำกัดขนาดและตัดข้อมูลเก่าออกเมื่อเต็ม (LRU Concept)
+        self._cache = OrderedDict()
+        self._cache_limit = 1000 
+
+    def _get_cache_key(self, step_number: int, content: str) -> str:
+        """สร้าง Key สำหรับ Cache โดยใช้ MD5 Hash ของข้อความเพื่อประหยัดพื้นที่"""
+        raw_data = f"{step_number}:{content.strip()}"
+        return hashlib.md5(raw_data.encode('utf-8')).hexdigest()
 
     async def analyze_step(self, step_number: int, content: str) -> dict:
         # 1. Validation (ตรวจสอบความยาวข้อความ)
         if not content or len(content.strip()) < 10:
             return {
                 "relevance_score": 0,
-                "creativity_score": 0, # [ADDED] Default value
+                "creativity_score": 0,
                 "score_breakdown": [],
                 "feedback_th": "เนื้อหาสั้นเกินไป กรุณาอธิบายรายละเอียดให้ชัดเจนกว่านี้ (อย่างน้อย 1-2 ประโยค)",
                 "warning_flags": ["too_short"]
             }
+
+        # [ADDED] Check Cache: ถ้าเคยวิเคราะห์ข้อความนี้แล้ว ให้คืนค่าเดิมทันที
+        cache_key = self._get_cache_key(step_number, content)
+        if cache_key in self._cache:
+            # ย้าย key ไปท้ายสุด (Mark as recently used)
+            self._cache.move_to_end(cache_key)
+            print(f"♻️  Gemini Cache Hit for Step {step_number}")
+            return self._cache[cache_key]
 
         # 2. Rubric Definition (เกณฑ์การให้คะแนนฉบับเต็ม)
         rubrics = {
@@ -76,7 +97,6 @@ class GeminiService:
         current_rubric = rubrics.get(step_number, ["เกณฑ์ที่ 1", "เกณฑ์ที่ 2", "เกณฑ์ที่ 3", "เกณฑ์ที่ 4"])
         
         # 3. Prompt (คำสั่งที่ส่งให้ AI ฉบับเต็ม)
-        # [ADDED] เพิ่มคำสั่งเรื่อง creativity_score
         prompt = f"""
         Act as a strict Senior Engineering Professor evaluating a student's EDP project submission (Step {step_number}).
         Student Input: "{content}"
@@ -115,7 +135,16 @@ class GeminiService:
 
         # [SAFEGUARD] เรียกผ่านฟังก์ชัน Retry พร้อมดัก Error
         try:
-            return await self._generate_with_retry_and_limit(prompt)
+            result = await self._generate_with_retry_and_limit(prompt)
+            
+            # [ADDED] Save to Cache
+            self._cache[cache_key] = result
+            # ถ้า Cache เต็ม ให้ลบตัวเก่าสุดออก (FIFO/LRU)
+            if len(self._cache) > self._cache_limit:
+                self._cache.popitem(last=False)
+                
+            return result
+
         except RetryError:
             print("Gemini Quota Exceeded: Max retries reached.")
             return {
@@ -162,7 +191,7 @@ class GeminiService:
                 
                 # Default values
                 result.setdefault("warning_flags", [])
-                result.setdefault("creativity_score", 0) # [ADDED] กันเหนียว
+                result.setdefault("creativity_score", 0) 
                 result.setdefault("feedback_th", "ระบบไม่สามารถสรุปคำแนะนำได้")
                 return result
             else:
