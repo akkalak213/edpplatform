@@ -28,13 +28,13 @@ client.interceptors.request.use(
       // ✅ เช็ค expiry ก่อนแนบ token ทุกครั้ง
       if (isTokenExpired(token)) {
         // Token หมดอายุ → ล้าง storage แล้วไป login ทันที
-        // ไม่ต้องรอให้ server ตอบ 401 กลับมาก่อน
         localStorage.removeItem('token');
         localStorage.removeItem('role');
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
-        // ยกเลิก request นี้เลย ไม่ส่งออกไป
+        
+        // โยน Cancel ออกไป เพื่อให้ Response Interceptor ข้างล่างดักจับได้
         return Promise.reject(new axios.Cancel('Token expired'));
       }
 
@@ -50,8 +50,11 @@ client.interceptors.request.use(
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    // ถ้าเป็น Cancel (จาก token expired ข้างบน) ไม่ต้องทำอะไรเพิ่ม
-    if (axios.isCancel(error)) return Promise.reject(error);
+    // [FIX] ถ้าถูก Cancel (เช่น จาก Token หมดอายุใน Request Interceptor ด้านบน)
+    // ให้คืนค่า Promise เปล่าๆ เพื่อ "แช่แข็ง" Component ไม่ให้พ่น Error แปลกๆ ออกมาระหว่างรอ Redirect
+    if (axios.isCancel(error)) {
+      return new Promise(() => {}); 
+    }
 
     if (error.response?.status === 401) {
       console.warn("Session expired or unauthorized. Redirecting to login...");
@@ -60,7 +63,9 @@ client.interceptors.response.use(
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
+      return new Promise(() => {});
     }
+    
     return Promise.reject(error);
   }
 );

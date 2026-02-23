@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
@@ -98,7 +98,14 @@ export default function TeacherDashboard() {
     isOpen: false, title: '', message: '', type: 'success'
   });
 
-  // [FIXED] ใช้ fetchData โดยตรงใน useCallback ไม่ต้องใช้ useRef ให้ซับซ้อน
+  // [FIX] ใช้ Ref เพื่อเช็คสถานะการเปิด Modal แบบทันที (ป้องกัน State Closure ใน Interval)
+  const isEditingRef = useRef(false);
+
+  // ควบคุมค่าของ isEditingRef ให้ตรงกับ State ของ Modal เสมอ
+  useEffect(() => {
+    isEditingRef.current = !!editingStudent || confirmModal.isOpen || isConfirmingAction;
+  }, [editingStudent, confirmModal.isOpen, isConfirmingAction]);
+
   const fetchData = useCallback(async () => {
     try {
       const [resStats, resStudents, resProjects] = await Promise.all([
@@ -120,10 +127,14 @@ export default function TeacherDashboard() {
     // รันครั้งแรกเมื่อโหลดหน้า
     fetchData();
     
-    // ตั้ง interval ให้ดึงข้อมูลอัตโนมัติทุก 10 วินาที
-    const interval = setInterval(fetchData, 10000); 
+    // [FIX] ตั้ง interval โดยมีเงื่อนไขเบรก ถ้าครูกำลังใช้งาน Modal จะข้ามการโหลดไปก่อนเพื่อไม่ให้หน้าจอกระตุก
+    const intervalId = setInterval(() => {
+      if (!isEditingRef.current) {
+        fetchData();
+      }
+    }, 10000); 
 
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalId);
   }, [fetchData]); 
 
   const handleLogout = () => {
@@ -150,7 +161,7 @@ export default function TeacherDashboard() {
             type: 'success'
           });
         } catch (err) {
-          console.error("Reset password failed:", err); // [FIXED] ใช้ err
+          console.error("Reset password failed:", err);
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           const error = err as { response?: { data?: { detail?: string } }; message?: string };
           setAlertModal({
@@ -204,7 +215,7 @@ export default function TeacherDashboard() {
       fetchData(); // ดึงข้อมูลใหม่
       setAlertModal({ isOpen: true, title: 'สำเร็จ', message: 'อัปเดตข้อมูลนักเรียนเรียบร้อยแล้ว', type: 'success' });
     } catch (err) {
-      console.error("Update failed:", err); // [FIXED] ใช้ err เผื่อมีปัญหา
+      console.error("Update failed:", err);
       setAlertModal({ isOpen: true, title: 'ผิดพลาด', message: 'ไม่สามารถแก้ไขข้อมูลได้', type: 'error' });
     } finally {
       setEditLoading(false);

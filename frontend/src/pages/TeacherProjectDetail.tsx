@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { ArrowLeft, User, MessageSquare, Save, CheckCircle, Award, AlertTriangle, Loader2 } from 'lucide-react';
-// [NEW] นำเข้า useToast เพื่อใช้แจ้งเตือนสวยๆ
 import { useToast } from '../components/Toast';
 
 interface EdpStep {
@@ -17,7 +16,7 @@ interface EdpStep {
   created_at: string;
 }
 
-interface TeacherProject {
+interface TeacherProjectInfo {
   id: number;
   title: string;
   owner: {
@@ -29,13 +28,13 @@ interface TeacherProject {
 export default function TeacherProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { showToast } = useToast(); // [NEW] เรียกใช้ Hook แจ้งเตือน
+  const { showToast } = useToast();
 
   const [steps, setSteps] = useState<EdpStep[]>([]);
   const [projectTitle, setProjectTitle] = useState('');
   const [studentName, setStudentName] = useState('');
   
-  // State สำหรับการให้คะแนน (Editing Mode)
+  
   const [editingStepId, setEditingStepId] = useState<number | null>(null);
   const [gradeScore, setGradeScore] = useState<number>(0);
   const [gradeComment, setGradeComment] = useState('');
@@ -43,21 +42,23 @@ export default function TeacherProjectDetail() {
 
   const fetchProjectData = useCallback(async () => {
     try {
-      // 1. ดึงข้อมูล Steps
-      const resSteps = await client.get(`/edp/project/${id}`);
-      setSteps(resSteps.data);
-
-      // 2. ดึงข้อมูล Project Info
-      const resProj = await client.get('/edp/teacher/projects');
-      const currentProj = resProj.data.find((p: TeacherProject) => p.id === Number(id));
       
-      if (currentProj) {
-        setProjectTitle(currentProj.title);
-        setStudentName(`${currentProj.owner.first_name} ${currentProj.owner.last_name}`);
+      
+      const [resSteps, resInfo] = await Promise.all([
+        client.get(`/edp/project/${id}`),
+        client.get<TeacherProjectInfo>(`/edp/project-info/${id}`) 
+      ]);
+      
+      setSteps(resSteps.data);
+      
+      if (resInfo.data) {
+        setProjectTitle(resInfo.data.title);
+        setStudentName(`${resInfo.data.owner.first_name} ${resInfo.data.owner.last_name}`);
       }
+      
     } catch (err) {
       console.error("Error fetching data:", err);
-      showToast("ไม่สามารถดึงข้อมูลโปรเจคได้", "error");
+      showToast("ไม่สามารถดึงข้อมูลโปรเจกต์ได้", "error");
     }
   }, [id, showToast]);
 
@@ -67,7 +68,6 @@ export default function TeacherProjectDetail() {
 
   const handleEditClick = (step: EdpStep) => {
     setEditingStepId(step.id);
-    // ถ้าครูเคยให้คะแนนแล้วให้ดึงมาโชว์ ถ้ายังให้ใช้คะแนน AI เป็นค่าเริ่มต้น
     setGradeScore(step.teacher_score ?? step.score); 
     setGradeComment(step.teacher_comment || "");
   };
@@ -80,7 +80,6 @@ export default function TeacherProjectDetail() {
         teacher_comment: gradeComment
       });
       
-      // [FIX] ใช้ prev เพื่อความแม่นยำในการอัปเดต state
       setSteps(prev => prev.map(s => s.id === stepId ? { 
         ...s, 
         teacher_score: gradeScore, 
@@ -89,10 +88,10 @@ export default function TeacherProjectDetail() {
       } : s));
       
       setEditingStepId(null);
-      showToast("บันทึกคะแนนเรียบร้อยแล้ว", "success"); // [NEW] แจ้งเตือนสีเขียว
+      showToast("บันทึกคะแนนเรียบร้อยแล้ว", "success"); 
     } catch (err) {
       console.error("Save grade error:", err);
-      showToast("บันทึกไม่สำเร็จ กรุณาลองใหม่", "error"); // [NEW] แจ้งเตือนสีแดง
+      showToast("บันทึกไม่สำเร็จ กรุณาลองใหม่", "error"); 
     } finally {
       setSaving(false);
     }
@@ -113,7 +112,7 @@ export default function TeacherProjectDetail() {
               ตรวจงาน: {projectTitle || "กำลังโหลด..."}
             </h1>
             <div className="flex items-center gap-2 text-sm text-slate-500 mt-1">
-              <User className="w-3 h-3" /> นักเรียน: <span className="text-indigo-400">{studentName}</span>
+              <User className="w-3 h-3" /> นักเรียน: <span className="text-indigo-400">{studentName || "กำลังโหลด..."}</span>
             </div>
           </div>
         </div>

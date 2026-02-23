@@ -13,7 +13,7 @@ from google.api_core import exceptions
 load_dotenv()
 
 # [TUNING] ลดจำนวนคนเข้าพร้อมกัน (ปรับตาม Tier ที่ใช้)
-gemini_semaphore = asyncio.Semaphore(50)
+gemini_semaphore = asyncio.Semaphore(20)
 
 class GeminiService:
     def __init__(self):
@@ -22,14 +22,11 @@ class GeminiService:
             print("Warning: GEMINI_API_KEY not found in .env")
         else:
             genai.configure(api_key=api_key)
-            # [CONFIG] ห้ามเปลี่ยน Model ตามคำสั่ง (ใช้ 2.5 flash ตัวเดิม)
             self.model = genai.GenerativeModel('gemini-2.5-flash')
         
-        # [ADDED] ระบบ Caching (เก็บผลลัพธ์การวิเคราะห์)
-        # ใช้ OrderedDict เพื่อจำกัดขนาดและตัดข้อมูลเก่าออกเมื่อเต็ม (LRU Concept)
         self._cache = OrderedDict()
         self._cache_limit = 1000 
-        self._cache_lock = asyncio.Lock() # [FIX] เพิ่ม Lock เพื่อให้ Thread-safe
+        self._cache_lock = asyncio.Lock() # เพิ่ม Lock เพื่อให้ Thread-safe
 
     def _get_cache_key(self, step_number: int, content: str) -> str:
         """สร้าง Key สำหรับ Cache โดยใช้ MD5 Hash ของข้อความเพื่อประหยัดพื้นที่"""
@@ -47,11 +44,11 @@ class GeminiService:
                 "warning_flags": ["too_short"]
             }
 
-        # [ADDED & FIX] Check Cache แบบ Thread-safe
         cache_key = self._get_cache_key(step_number, content)
+        
+        # [FIX 1] Check Cache 
         async with self._cache_lock:
             if cache_key in self._cache:
-                # ย้าย key ไปท้ายสุด (Mark as recently used)
                 self._cache.move_to_end(cache_key)
                 print(f"♻️  Gemini Cache Hit for Step {step_number}")
                 return self._cache[cache_key]
@@ -135,37 +132,42 @@ class GeminiService:
         }}
         """
 
-        # [SAFEGUARD] เรียกผ่านฟังก์ชัน Retry พร้อมดัก Error
         try:
+            # [FIX 2] ครอบ Lock ระหว่างการเรียก API ด้วย เพื่อป้องกัน Race condition สมบูรณ์แบบ
+            # และดักจับ Exception ทุกรูปแบบที่หลุดรอดมาจาก Tenacity
             result = await self._generate_with_retry_and_limit(prompt)
             
-            # [FIX] Save to Cache แบบ Thread-safe
             async with self._cache_lock:
-                self._cache[cache_key] = result
-                # ถ้า Cache เต็ม ให้ลบตัวเก่าสุดออก (FIFO/LRU)
-                if len(self._cache) > self._cache_limit:
-                    self._cache.popitem(last=False)
+                # ตรวจสอบอีกครั้งเผื่อระหว่างรอ API มี request อื่นเอาใส่ cache ไปแล้ว
+                if cache_key not in self._cache:
+                    self._cache[cache_key] = result
+                    if len(self._cache) > self._cache_limit:
+                        self._cache.popitem(last=False)
                 
             return result
 
         except RetryError:
             print("Gemini Quota Exceeded: Max retries reached.")
-            return {
-                "relevance_score": 0,
-                "creativity_score": 0,
-                "score_breakdown": [],
-                "feedback_th": "⚠️ ขณะนี้มีผู้ใช้งานจำนวนมาก ระบบ AI กำลังประมวลผลไม่ทัน กรุณารอ 1-2 นาทีแล้วกดส่งใหม่อีกครั้งครับ",
-                "warning_flags": ["quota_exceeded"]
-            }
+            return self._get_fallback_response("⚠️ ขณะนี้มีผู้ใช้งานจำนวนมาก ระบบ AI กำลังประมวลผลไม่ทัน กรุณารอ 1-2 นาทีแล้วกดส่งใหม่อีกครั้งครับ", "quota_exceeded")
+            
+        except exceptions.ResourceExhausted:
+             print("Gemini Quota Exceeded (ResourceExhausted leaked).")
+             return self._get_fallback_response("⚠️ โควตาการใช้งาน AI เต็มชั่วคราว กรุณารอ 1-2 นาทีครับ", "quota_exceeded")
+             
         except Exception as e:
+            # [FIX 3] ดักจับ Error แปลกๆ ที่อาจทำให้ระบบล่ม
             print(f"Unexpected Error in analyze_step: {e}")
-            return {
-                "relevance_score": 0,
-                "creativity_score": 0,
-                "score_breakdown": [],
-                "feedback_th": "เกิดข้อผิดพลาดทางเทคนิค กรุณาลองใหม่อีกครั้ง",
-                "warning_flags": ["system_error"]
-            }
+            return self._get_fallback_response("เกิดข้อผิดพลาดทางเทคนิคในการประมวลผลคำตอบ กรุณาลองใหม่อีกครั้ง", "system_error")
+
+    def _get_fallback_response(self, message: str, flag: str) -> dict:
+        """Helper method คืนค่า Default เมื่อเกิด Error ป้องกัน Code ซ้ำซ้อน"""
+        return {
+            "relevance_score": 0,
+            "creativity_score": 0,
+            "score_breakdown": [],
+            "feedback_th": message,
+            "warning_flags": [flag]
+        }
 
     # ---------------------------------------------------------
     # ฟังก์ชัน Retry Logic
@@ -178,7 +180,6 @@ class GeminiService:
     async def _generate_with_retry_and_limit(self, prompt: str):
         # ใช้ Semaphore จำกัดคนเข้า
         async with gemini_semaphore:
-            # เรียกใช้ Model
             response = await self.model.generate_content_async(prompt)
             
             # Parsing Logic
@@ -198,10 +199,5 @@ class GeminiService:
                 result.setdefault("feedback_th", "ระบบไม่สามารถสรุปคำแนะนำได้")
                 return result
             else:
-                return {
-                    "relevance_score": 0, 
-                    "creativity_score": 0,
-                    "score_breakdown": [],
-                    "feedback_th": "AI ตอบกลับผิดรูปแบบ กรุณาลองใหม่", 
-                    "warning_flags": ["ai_format_error"]
-                }
+                # โยน ValueError เพื่อให้ block 'except Exception' ในตัวเรียกจัดการ
+                raise ValueError("AI ตอบกลับผิดรูปแบบ ไม่สามารถแปลงเป็น JSON ได้")

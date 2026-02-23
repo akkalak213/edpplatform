@@ -419,7 +419,7 @@ export default function TeacherQuizAnalytics() {
 
       {/* ===== RESET MODAL (3 STEPS) ===== */}
       {resetModal.isOpen && (
-        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-70 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
 
             <button onClick={closeResetModal} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">

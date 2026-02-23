@@ -17,8 +17,8 @@ interface Question {
 
 interface AnswerLog {
   question_id: number;
-  selected_text: string; // [FIX] รับเป็น Text แทน
-  correct_text: string;  // [FIX] รับเป็น Text แทน
+  selected_text: string; 
+  correct_text: string;  
   is_correct: boolean;
   category: string;
 }
@@ -38,7 +38,6 @@ export default function StudentQuiz() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   
-  // [FIX] เปลี่ยนเก็บจาก Index เป็น Text
   const [answers, setAnswers] = useState<Record<number, string>>({}); 
   const [isLocked, setIsLocked] = useState(false); 
   
@@ -57,8 +56,6 @@ export default function StudentQuiz() {
   const [cheatingDetected, setCheatingDetected] = useState(false);
   const isQuizActiveRef = useRef(false);
 
-  // [FIX 1] แก้ไขเงื่อนไข Anti-cheat: เพิ่ม cheatingDetected เป็น dependency
-  // และป้องกันไม่ให้ระบบจับผิดทุจริตถ้านักเรียนสอบเสร็จแล้ว (quizFinished = true)
   useEffect(() => {
     isQuizActiveRef.current = quizStarted && !quizFinished && !cheatingDetected;
   }, [quizStarted, quizFinished, cheatingDetected]);
@@ -73,19 +70,15 @@ export default function StudentQuiz() {
     };
 
     const onVisibilityChange = () => {
-      if (document.hidden) handleViolation();
-    };
-
-    const onBlur = () => {
-      handleViolation();
+      if (document.hidden) {
+          handleViolation();
+      }
     };
 
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("blur", onBlur);
 
     return () => {
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("blur", onBlur);
     };
   }, []); 
 
@@ -99,6 +92,7 @@ export default function StudentQuiz() {
     setIsLocked(false);
     setSubmitting(false);
     setShowExitConfirm(false);
+    setResult(null); // [FIX 19] เพิ่มการเคลียร์ค่า Result ให้สมบูรณ์ 100%
     fetchQuestions(); 
   };
 
@@ -158,7 +152,6 @@ export default function StudentQuiz() {
   const handleSelectChoice = (choiceText: string) => {
     if (isLocked) return; 
     const qId = questions[currentQIndex].id;
-    // [FIX] เก็บข้อความตัวเลือกไว้แทน Index
     setAnswers(prev => ({ ...prev, [qId]: choiceText }));
   };
 
@@ -171,7 +164,6 @@ export default function StudentQuiz() {
   };
 
   const handleNext = () => {
-    // [FIX 2] เพิ่มการเช็คสถานะ submitting ป้องกันการกดปุ่มถัดไป/ปุ่มส่งรัวๆ
     if (submitting) return;
 
     if (currentQIndex < questions.length - 1) {
@@ -229,7 +221,7 @@ export default function StudentQuiz() {
           </div>
           <h2 className="text-3xl font-black text-white mb-2 uppercase tracking-wider">ทุจริตการสอบ!</h2>
           <p className="text-red-200 text-lg mb-6 leading-relaxed">
-            ระบบตรวจพบว่าคุณพยายามออกจากหน้าจอ หรือสลับโปรแกรมระหว่างทำข้อสอบ
+            ระบบตรวจพบว่าคุณพยายามสลับแอปพลิเคชัน หรือซ่อนหน้าต่างระหว่างทำข้อสอบ
           </p>
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-8 text-sm text-red-300">
             ⛔ การสอบครั้งนี้ถือเป็นโมฆะ <br/>
@@ -263,7 +255,7 @@ export default function StudentQuiz() {
             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> สุ่มลำดับข้อและตัวเลือกทุกครั้ง</p>
             <p className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-400"/> เกณฑ์ผ่านคือ 80% (32 ข้อขึ้นไป)</p>
             <p className="flex items-center gap-2 text-red-400 font-bold bg-red-500/10 p-2 rounded-lg border border-red-500/20">
-              <AlertTriangle className="w-4 h-4 text-red-500"/> ห้ามออกจากหน้าจอเด็ดขาด!
+              <AlertTriangle className="w-4 h-4 text-red-500"/> ห้ามสลับแอปพลิเคชันเด็ดขาด!
             </p>
           </div>
 
@@ -310,7 +302,8 @@ export default function StudentQuiz() {
             </div>
           </div>
 
-          <button onClick={() => window.location.reload()} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center justify-center gap-2">
+          {/* [FIX 19] เปลี่ยน onClick ตรงนี้เป็น handleRestartQuiz */}
+          <button onClick={handleRestartQuiz} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center justify-center gap-2">
             <RotateCw className="w-5 h-5" /> ทำแบบทดสอบอีกครั้ง
           </button>
           <button onClick={() => navigate('/dashboard')} className="w-full py-4 text-slate-500 hover:text-white">
@@ -324,7 +317,6 @@ export default function StudentQuiz() {
   // --- 2. Quiz Interface ---
   const currentQ = questions[currentQIndex];
   
-  // [FIX] เช็คว่า text ที่เลือกคืออะไร
   const selectedText = answers[currentQ.id]; 
   const hasAnswered = selectedText !== undefined;
   const isLastQuestion = currentQIndex === questions.length - 1;
@@ -367,12 +359,12 @@ export default function StudentQuiz() {
 
         <div className="space-y-4">
           {currentQ.choices.map((choice, displayIdx) => {
-            const isSelected = selectedText === choice; // [FIX] เช็คด้วย Text
+            const isSelected = selectedText === choice; 
 
             return (
               <button
                 key={displayIdx}
-                onClick={() => handleSelectChoice(choice)} // [FIX] ส่ง Text กลับไป
+                onClick={() => handleSelectChoice(choice)} 
                 disabled={isLocked || submitting}
                 className={`w-full p-5 rounded-2xl border text-left transition-all relative overflow-hidden group
                   ${isSelected 

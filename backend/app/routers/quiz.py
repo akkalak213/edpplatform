@@ -188,7 +188,10 @@ def get_item_analysis(db: Session = Depends(get_db)):
     analysis = {q.id: {"text": q.question_text, "correct": 0, "total": 0, "category": q.category, "order": q.order} for q in questions}
 
     for attempt in attempts:
-        if not attempt.answers_log: continue
+        # ✅ GUARD 1: ตรวจสอบและป้องกันค่า None หรือ Array ว่าง
+        if not attempt.answers_log: 
+            continue
+            
         for log in attempt.answers_log:
             if isinstance(log, dict):
                 q_id = log.get('question_id')
@@ -235,10 +238,15 @@ def get_student_analytics(db: Session = Depends(get_db)):
                 "avg_score": 0,
                 "total_score_sum": 0,
                 "latest_attempt_at": att.created_at,
-                "history": [] # ✅ จุดสำคัญ: แนบประวัติการสอบไปให้ Frontend
+                "history": [] # ✅ แนบประวัติการสอบไปให้ Frontend
             }
         
         s = student_map[sid]
+        
+        # ✅ GUARD 2: เช็คก่อนนับคะแนน เพื่อไม่ให้นับ Attempt ที่ Error (ไม่มี Log) เป็นการสอบ
+        # หรือถ้าต้องการนับด้วยแม้จะไม่มี Log (เช่น บั๊กก่อนหน้า) ก็ปล่อยให้มันบวกได้ 
+        # แต่อย่างน้อยก็ไม่เกิด Error ตอนพยายามวน Loop
+        
         s['attempts_count'] += 1
         s['total_score_sum'] += att.score
         

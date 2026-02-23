@@ -77,14 +77,13 @@ def get_dashboard_stats(
 @router.get("/teacher/students", response_model=List[UserInfo])
 def get_all_students(
     skip: int = 0,
-    limit: int = 1000, # ✅ ปรับค่า Default Limit ให้ดึงข้อมูลได้เยอะขึ้น
+    limit: int = 1000, 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # ✅ ปลดล็อก Pagination Guard ให้รองรับ 2000 รายการ จะได้ไม่มีรายชื่อนักเรียนหาย
     limit = min(limit, 1000)
     
     results = db.query(
@@ -137,7 +136,6 @@ def delete_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # ตรวจสอบสิทธิ์ว่าต้องเป็นครูเท่านั้น
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied: เฉพาะครูเท่านั้นที่สามารถลบข้อมูลนักเรียนได้")
         
@@ -146,21 +144,15 @@ def delete_student(
         raise HTTPException(status_code=404, detail="Student not found")
         
     try:
-        # ✅ 1. ลบประวัติการสอบ (QuizAttempt) ของนักเรียนคนนี้ทั้งหมด
         db.query(QuizAttempt).filter(QuizAttempt.student_id == student.id).delete(synchronize_session=False)
         
-        # ✅ 2. ค้นหาโครงงาน (Project) ทั้งหมดของนักเรียน
         projects = db.query(Project).filter(Project.owner_id == student.id).all()
         project_ids = [p.id for p in projects]
         
         if project_ids:
-            # ✅ 3. ลบขั้นตอนงาน (EdpStep) ที่ผูกอยู่กับโครงงานทั้งหมดของเด็กคนนี้
             db.query(EdpStep).filter(EdpStep.project_id.in_(project_ids)).delete(synchronize_session=False)
-            
-            # ✅ 4. ลบโครงงาน (Project)
             db.query(Project).filter(Project.owner_id == student.id).delete(synchronize_session=False)
             
-        # ✅ 5. ลบบัญชีนักเรียน (User) ออกจากระบบเป็นขั้นตอนสุดท้าย
         db.delete(student)
         db.commit()
         return {"message": "ลบบัญชีนักเรียนและข้อมูลที่เกี่ยวข้องทั้งหมดเรียบร้อยแล้ว"}
@@ -185,36 +177,50 @@ def get_user_projects(
 @router.get("/teacher/projects", response_model=List[ProjectWithStudent])
 def get_all_projects_for_teacher(
     skip: int = 0,
-    limit: int = 1000, # ✅ ปรับค่า Default Limit ให้ดึงข้อมูลได้เยอะขึ้น
+    limit: int = 1000,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ✅ ปลดล็อก Pagination Guard ให้รองรับ 2000 รายการ จะได้ไม่มีโครงงานหาย
     limit = min(limit, 1000)
 
-    # [FIX 2] แก้ปัญหาโปรเจกต์ขึ้นซ้ำ โดยการดึงเฉพาะ ID ของ Step ล่าสุดจริงๆ (max_step_id) เท่านั้น
+    # 🚀 [BEST PRACTICE OPTIMIZATION] แตก Query ลดภาระ Database ป้องกันตารางค้าง
+    
+    # จังหวะที่ 1: ดึงเฉพาะ Project และข้อมูล User แบบจำกัดจำนวน (ดึงเร็วมาก)
+    projects_and_users = db.query(Project, User)\
+        .join(User, Project.owner_id == User.id)\
+        .order_by(Project.created_at.desc())\
+        .offset(skip).limit(limit)\
+        .all()
+
+    if not projects_and_users:
+        return []
+
+    # แยกเอาเฉพาะ ID ของ Project เพื่อเอาไปหา Step
+    project_ids = [p.Project.id for p in projects_and_users]
+
+    # จังหวะที่ 2: ดึง Step ล่าสุด เฉพาะของ Project ID ชุดนี้เท่านั้น (ข้ามโปรเจกต์อื่นไปเลย)
     latest_step_sub = db.query(
         EdpStep.project_id,
         func.max(EdpStep.id).label("max_step_id")
-    ).group_by(EdpStep.project_id).subquery()
+    ).filter(EdpStep.project_id.in_(project_ids))\
+     .group_by(EdpStep.project_id).subquery()
 
-    # นำมา Join เพื่อให้ได้ข้อมูลที่ Unique 100%
-    projects_query = db.query(
-        Project, 
-        User, 
-        EdpStep
-    ).join(User, Project.owner_id == User.id)\
-     .outerjoin(latest_step_sub, Project.id == latest_step_sub.c.project_id)\
-     .outerjoin(EdpStep, EdpStep.id == latest_step_sub.c.max_step_id)\
-     .order_by(Project.created_at.desc())\
-     .offset(skip).limit(limit)\
-     .all()
-    
+    latest_steps = db.query(EdpStep).join(
+        latest_step_sub,
+        EdpStep.id == latest_step_sub.c.max_step_id
+    ).all()
+
+    # จังหวะที่ 3: นำ Step ที่ได้มาทำเป็น Dictionary เพื่อง่ายต่อการจับคู่ (หาเจอกระพริบตา O(1))
+    step_dict = {step.project_id: step for step in latest_steps}
+
+    # รวมร่างข้อมูลส่งให้ Frontend
     results = []
-    for p, owner, edp_step in projects_query:
+    for p, owner in projects_and_users:
+        edp_step = step_dict.get(p.id)
+        
         status_text = "In Progress"
         step_num = 0
         
@@ -271,10 +277,7 @@ def delete_project(
         raise HTTPException(status_code=403, detail="Access denied")
         
     try:
-        # ✅ ลบข้อมูลขั้นตอนการทำงาน (EdpStep) ของโครงงานนี้ทิ้งก่อนลบโปรเจกต์
         db.query(EdpStep).filter(EdpStep.project_id == project.id).delete(synchronize_session=False)
-        
-        # ลบโครงงาน
         db.delete(project)
         db.commit()
         return {"message": "Project deleted successfully"}
@@ -290,7 +293,6 @@ async def submit_edp_step(
     ai_service: GeminiService = Depends(get_ai_service),
     current_user: User = Depends(get_current_user)
 ):
-    # [FIX] Guard ป้องกัน Step เกิน 6
     if step.step_number < 1 or step.step_number > 6:
         raise HTTPException(status_code=400, detail="Invalid step number. Must be between 1 and 6.")
 
@@ -302,31 +304,26 @@ async def submit_edp_step(
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ดึงงานล่าสุดของ *ด่านนี้* มาเทียบ (เพื่อดูเรื่องสแปมข้อความเดิม)
     last_step = db.query(EdpStep).filter(
         EdpStep.project_id == step.project_id,
         EdpStep.step_number == step.step_number
     ).order_by(desc(EdpStep.created_at)).first()
 
-    # ดึงงานล่าสุดของ *โปรเจกต์นี้ทั้งหมด* เพื่อใช้เช็ค Cycle ทับซ้อน
     absolute_latest_step = db.query(EdpStep).filter(
         EdpStep.project_id == step.project_id
     ).order_by(desc(EdpStep.created_at)).first()
 
     if last_step:
-        # [FIX 1] ดักจับข้อความซ้ำเป๊ะๆ ป้องกันเด็กสแปมส่งเพื่อเปลี่ยนคะแนน
         if last_step.content.strip() == step.content.strip():
             raise HTTPException(
                 status_code=400, 
                 detail="เนื้อหาเหมือนกับครั้งที่แล้วเป๊ะเลย! กรุณาปรับปรุงแก้ไขตามคำแนะนำก่อนส่งใหม่นะครับ"
             )
 
-        # Rate Limiting (15 วินาที)
         if last_step.created_at:
             now = datetime.now(timezone.utc)
             last_step_time = last_step.created_at
             
-            # ป้องกันปัญหา Race Condition timezone-aware vs timezone-naive
             if last_step_time.tzinfo is None:
                 last_step_time = last_step_time.replace(tzinfo=timezone.utc)
             
@@ -334,11 +331,8 @@ async def submit_edp_step(
             if time_diff < 15:
                 raise HTTPException(status_code=429, detail=f"กรุณารออีก {15 - int(time_diff)} วินาที ก่อนส่งงานใหม่อีกครั้ง")
 
-    # --- AI Analysis ---
     analysis = await ai_service.analyze_step(step.step_number, step.content)
     
-    # [FIX 2] เช็คการนับ attempt_count ทับซ้อนในกรณีขึ้น Cycle ใหม่
-    # ถ้าด่านล่าสุดสุดที่เพิ่งทำ ไม่ใช่ด่านนี้ แสดงว่าเด็กวน Cycle กลับมาทำด่านนี้ใหม่ ให้เริ่มนับ attempt = 1 
     if absolute_latest_step and absolute_latest_step.step_number != step.step_number:
         current_attempt = 1
     else:
@@ -363,7 +357,7 @@ async def submit_edp_step(
         
         status="submitted",
         word_count=len(step.content.split()) if step.content else 0,
-        attempt_count=current_attempt  # ใช้ค่า attempt ที่คำนวณใหม่
+        attempt_count=current_attempt 
     )
     
     db.add(new_step)
@@ -386,7 +380,16 @@ def get_project_steps(
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    steps = db.query(EdpStep).filter(EdpStep.project_id == project_id).order_by(EdpStep.step_number.asc()).all()
+    subquery = db.query(
+        EdpStep.step_number,
+        func.max(EdpStep.id).label('max_id')
+    ).filter(EdpStep.project_id == project_id).group_by(EdpStep.step_number).subquery()
+
+    steps = db.query(EdpStep).join(
+        subquery,
+        and_(EdpStep.id == subquery.c.max_id)
+    ).order_by(EdpStep.step_number.asc()).all()
+
     return steps or []
 
 @router.patch("/step/{step_id}/grade")
@@ -410,3 +413,31 @@ def grade_step(
     db.commit()
     db.refresh(step)
     return step
+
+# วางโค้ดนี้ไว้ล่างสุดของไฟล์ backend/app/routers/edp.py
+
+@router.get("/project-info/{project_id}")
+def get_single_project_info(
+    project_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """API สำหรับดึงชื่อโปรเจกต์และชื่อนักเรียนแค่ 1 รายการ (ลดภาระเซิร์ฟเวอร์)"""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    if project.owner_id != current_user.id and current_user.role != 'teacher':
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    owner = db.query(User).filter(User.id == project.owner_id).first()
+    
+    return {
+        "id": project.id,
+        "title": project.title,
+        "owner": {
+            "first_name": owner.first_name if owner else "Unknown",
+            "last_name": owner.last_name if owner else "Unknown"
+        }
+    }

@@ -52,12 +52,24 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
-    # [OPTIMIZED] อัปเดต last_active_at เฉพาะเมื่อผ่านไปแล้วอย่างน้อย 1 นาที
-    # ช่วยลดภาระ Database มหาศาลเมื่อมีนักเรียนใช้งานพร้อมกันเยอะๆ
+    # [OPTIMIZED & FIXED] อัปเดต last_active_at เฉพาะเมื่อผ่านไปแล้วอย่างน้อย 1 นาที
+    # และแก้ไขปัญหา Timezone Crash บน SQLite
     now = datetime.now(timezone.utc)
-    if user.last_active_at is None or (now - user.last_active_at).total_seconds() > 60:
+    
+    if user.last_active_at is None:
         user.last_active_at = now
         db.commit()
+    else:
+        # ทำให้มั่นใจว่า last_active_at จาก DB มี Timezone แน่นอนก่อนเปรียบเทียบ
+        last_active = user.last_active_at
+        if last_active.tzinfo is None:
+            last_active = last_active.replace(tzinfo=timezone.utc)
+            
+        time_diff = (now - last_active).total_seconds()
+        
+        if time_diff > 60:
+            user.last_active_at = now
+            db.commit()
 
     return user
 

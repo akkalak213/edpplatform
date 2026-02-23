@@ -5,7 +5,7 @@ import {
   ArrowLeft, Send, Bot, CheckCircle, Loader2, RefreshCw, 
   ChevronRight, Copy, Check, Cpu, Sparkles, RotateCw, BarChart3, Clock,
   BookOpen, Lightbulb, X, AlertTriangle 
-} from 'lucide-react'; // [FIX] เพิ่ม AlertTriangle สำหรับแจ้งเตือน
+} from 'lucide-react'; 
 
 // --- Interfaces ---
 interface ScoreItem {
@@ -279,7 +279,7 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   
-  // [NEW] State สำหรับเก็บข้อความ Error ที่ส่งมาจาก Backend เพื่อแสดงเป็น Banner
+  // State สำหรับเก็บข้อความ Error ที่ส่งมาจาก Backend เพื่อแสดงเป็น Banner
   const [submitError, setSubmitError] = useState<string | null>(null);
   
   const [animatingStepId, setAnimatingStepId] = useState<number | null>(null);
@@ -310,7 +310,8 @@ export default function ProjectDetail() {
   const isProcessComplete = rawNextStep > 6;
   const currentStepNumber = isProcessComplete ? 1 : rawNextStep; 
 
-  // Timer Logic
+  // --- [FIX 14] Timer Logic Optimization ---
+  // เพิ่ม steps.length เป็น dependency เพื่อบังคับให้เวลารีเซ็ตเมื่อมีการส่งงานสำเร็จ (ไม่ว่าจะผ่านหรือตก)
   useEffect(() => {
     startTimeRef.current = Date.now();
     setSessionTime(0);
@@ -320,7 +321,7 @@ export default function ProjectDetail() {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [currentStepNumber]);
+  }, [currentStepNumber, steps.length]);
 
   const fetchSteps = useCallback(async () => {
     if (!id) return;
@@ -351,7 +352,7 @@ export default function ProjectDetail() {
     if (!currentInput.trim()) return;
     
     setSubmitting(true);
-    setSubmitError(null); // เคลียร์ error เก่าทุกครั้งก่อนส่ง
+    setSubmitError(null); 
     
     const timeSpent = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
@@ -368,11 +369,11 @@ export default function ProjectDetail() {
       setCurrentInput('');
       setAnimatingStepId(newStep.id);
       
-      startTimeRef.current = Date.now();
+      // ไม่ต้องตั้งค่า startTimeRef.current = Date.now() ตรงนี้แล้ว 
+      // เพราะ useEffect ตัวจัดการ Timer จะทำงานอัตโนมัติเมื่อ steps.length เปลี่ยนแปลง
 
     } catch (err) {
       console.error("Submit error:", err);
-      // ใช้ Type Casting กำหนดโครงสร้างข้อมูลแทนการใช้ any
       const error = err as { response?: { data?: { detail?: string } } };
       const errorMsg = error.response?.data?.detail || "เกิดข้อผิดพลาดในการส่งงาน กรุณาลองใหม่อีกครั้ง";
       setSubmitError(errorMsg);
@@ -387,7 +388,7 @@ export default function ProjectDetail() {
       {/* Background Texture */}
       <div className="fixed inset-0 pointer-events-none opacity-30">
          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-         <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-cyan-600/10 blur-[120px] rounded-full"></div>
+         <div className="absolute top-[-10%] left-[-10%] w-[125vw] h-[125vh] bg-cyan-600/10 blur-[120px] rounded-full"></div>
       </div>
 
       {/* Header */}
@@ -508,7 +509,7 @@ export default function ProjectDetail() {
               {(index === 0 || steps[index-1].step_number !== step.step_number) && (
                 <div className="flex items-center justify-center my-6 md:my-8 opacity-70">
                    <div className="bg-[#1E293B] border border-slate-700 text-slate-400 px-4 py-1.5 rounded-full text-[10px] md:text-xs font-mono tracking-wider shadow-sm text-center">
-                     STEP {step.step_number} : {EDP_STEPS[step.step_number-1]}
+                      STEP {step.step_number} : {EDP_STEPS[step.step_number-1]}
                    </div>
                 </div>
               )}
@@ -618,7 +619,7 @@ export default function ProjectDetail() {
              </button>
           </div>
 
-          {/* [NEW] แบนเนอร์แจ้งเตือนข้อผิดพลาด (เช่น ส่งข้อความซ้ำ) ที่ดูเนียนไปกับดีไซน์ แทน alert() */}
+          {/* แบนเนอร์แจ้งเตือนข้อผิดพลาด (เช่น ส่งข้อความซ้ำ) ที่ดูเนียนไปกับดีไซน์ แทน alert() */}
           {submitError && (
             <div className="mb-3 animate-in fade-in slide-in-from-bottom-2 flex items-start gap-3 bg-red-950/50 border border-red-500/30 text-red-200 px-4 py-3 md:px-5 md:py-4 rounded-2xl shadow-lg shadow-red-900/20">
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" />
