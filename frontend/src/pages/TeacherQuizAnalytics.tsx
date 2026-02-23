@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'; // ✅ เพิ่ม React เข้ามา
+import React, { useEffect, useState } from 'react';
 import client from '../api/client';
 import { 
   Users, CheckCircle, TrendingUp, AlertTriangle, Search, Trash2, 
-  Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X, ChevronDown, ChevronUp, Calendar, Clock, History // ✅ เพิ่ม History เข้ามา
+  Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X, ChevronDown, ChevronUp, Calendar, Clock, History
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -42,7 +42,7 @@ interface StudentStat {
   latest_score: number;
   avg_score: number;
   latest_attempt_at: string;
-  history: QuizHistory[];
+  history?: QuizHistory[]; // ✅ ใส่ ? เพื่อบอกว่าข้อมูลอาจจะยังมาไม่ถึง
 }
 
 // --- Modal Step Type ---
@@ -352,46 +352,53 @@ export default function TeacherQuizAnalytics() {
                       </td>
                     </tr>
                     
-                    {/* Expanded History Row */}
+                    {/* Expanded History Row (✅ ใส่ Guard ป้องกัน Error ถ้าหา history ไม่เจอ) */}
                     {expandedStudentId === s.id && (
                       <tr>
                         <td colSpan={7} className="p-0 border-b border-slate-700">
                           <div className="bg-[#0F172A] p-6 lg:p-8 shadow-inner animate-in slide-in-from-top-2 duration-200">
                             <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
-                              <History className="w-4 h-4 text-indigo-400" /> ประวัติการทำข้อสอบ ({s.history.length} ครั้ง)
+                              <History className="w-4 h-4 text-indigo-400" /> ประวัติการทำข้อสอบ ({(s.history || []).length} ครั้ง)
                             </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                              {s.history.map((attempt, idx) => (
-                                <div key={attempt.attempt_id} className={`p-4 rounded-2xl border ${attempt.passed ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'} relative overflow-hidden group`}>
-                                  
-                                  <div className="flex justify-between items-start mb-3">
-                                    <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">รอบที่ {s.history.length - idx}</span>
-                                    <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${attempt.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
-                                      {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
-                                    </span>
-                                  </div>
-
-                                  <div className="mb-4">
-                                    <div className="flex items-baseline gap-1">
-                                      <span className={`text-3xl font-black ${attempt.passed ? 'text-emerald-400' : 'text-red-400'}`}>{attempt.score}</span>
-                                      <span className="text-sm text-slate-500 font-medium">/{attempt.total_score}</span>
+                            
+                            {(s.history || []).length > 0 ? (
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {(s.history || []).map((attempt, idx) => (
+                                  <div key={attempt.attempt_id} className={`p-4 rounded-2xl border ${attempt.passed ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'} relative overflow-hidden group`}>
+                                    
+                                    <div className="flex justify-between items-start mb-3">
+                                      <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">
+                                        รอบที่ {(s.history || []).length - idx}
+                                      </span>
+                                      <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${attempt.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                                        {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
+                                      </span>
                                     </div>
-                                  </div>
 
-                                  <div className="space-y-1.5 text-[11px] text-slate-400">
-                                    <div className="flex items-center gap-2">
-                                      <Calendar className="w-3.5 h-3.5 opacity-70" />
-                                      {formatDate(attempt.created_at)}
+                                    <div className="mb-4">
+                                      <div className="flex items-baseline gap-1">
+                                        <span className={`text-3xl font-black ${attempt.passed ? 'text-emerald-400' : 'text-red-400'}`}>{attempt.score}</span>
+                                        <span className="text-sm text-slate-500 font-medium">/{attempt.total_score}</span>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <Clock className="w-3.5 h-3.5 opacity-70" />
-                                      ใช้เวลา: {formatTime(attempt.time_spent_seconds)}
-                                    </div>
-                                  </div>
 
-                                </div>
-                              ))}
-                            </div>
+                                    <div className="space-y-1.5 text-[11px] text-slate-400">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="w-3.5 h-3.5 opacity-70" />
+                                        {formatDate(attempt.created_at)}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Clock className="w-3.5 h-3.5 opacity-70" />
+                                        ใช้เวลา: {formatTime(attempt.time_spent_seconds)}
+                                      </div>
+                                    </div>
+
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                               <div className="text-slate-500 text-sm py-4">กำลังดึงข้อมูลประวัติ... หากไม่แสดงให้รอระบบอัปเดตสักครู่</div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -412,7 +419,7 @@ export default function TeacherQuizAnalytics() {
 
       {/* ===== RESET MODAL (3 STEPS) ===== */}
       {resetModal.isOpen && (
-        <div className="fixed inset-0 z-70 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-600 rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl animate-in zoom-in-95 relative">
 
             <button onClick={closeResetModal} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
