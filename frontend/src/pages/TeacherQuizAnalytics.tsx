@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'; // ✅ เพิ่ม React เข้ามา
 import client from '../api/client';
 import { 
   Users, CheckCircle, TrendingUp, AlertTriangle, Search, Trash2, 
-  Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X
+  Loader2, Trophy, XCircle, AlertCircle, RefreshCw, X, ChevronDown, ChevronUp, Calendar, Clock, History // ✅ เพิ่ม History เข้ามา
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -23,6 +23,15 @@ interface ItemAnalysis {
   order: number;
 }
 
+interface QuizHistory {
+  attempt_id: number;
+  score: number;
+  total_score: number;
+  passed: boolean;
+  time_spent_seconds: number;
+  created_at: string;
+}
+
 interface StudentStat {
   id: number;
   name: string;
@@ -33,6 +42,7 @@ interface StudentStat {
   latest_score: number;
   avg_score: number;
   latest_attempt_at: string;
+  history: QuizHistory[];
 }
 
 // --- Modal Step Type ---
@@ -53,6 +63,9 @@ export default function TeacherQuizAnalytics() {
   const [students, setStudents] = useState<StudentStat[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [resetting, setResetting] = useState(false);
+  
+  // State สำหรับเปิดปิดแถวดูประวัติการสอบ
+  const [expandedStudentId, setExpandedStudentId] = useState<number | null>(null);
 
   // --- Reset Modal State ---
   const [resetModal, setResetModal] = useState<ResetModalState>({
@@ -124,6 +137,23 @@ export default function TeacherQuizAnalytics() {
     }
   };
 
+  const toggleStudentExpand = (id: number) => {
+    setExpandedStudentId(expandedStudentId === id ? null : id);
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('th-TH', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m} นาที ${s} วินาที`;
+  };
+
   const filteredStudents = students.filter(s => 
     s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.student_id.includes(searchTerm) ||
@@ -174,7 +204,7 @@ export default function TeacherQuizAnalytics() {
         </div>
       </div>
 
-      {/* 2. Item Analysis Ranking (เปลี่ยนจากกราฟเป็น List เพื่อให้อ่านโจทย์ออก) */}
+      {/* 2. Item Analysis Ranking */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-[#1E293B] rounded-3xl border border-slate-700 shadow-xl overflow-hidden">
           <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex items-center justify-between">
@@ -207,11 +237,9 @@ export default function TeacherQuizAnalytics() {
                             {item.category}
                           </span>
                         </div>
-                        {/* แสดงโจทย์เต็มๆ */}
                         <p className="text-slate-200 text-sm font-medium line-clamp-2 mb-3 italic">
                           "{item.question}"
                         </p>
-                        
                         <div className="space-y-1.5">
                           <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest">
                             <span className="text-red-400">อัตราตอบผิด {wrongPercent}%</span>
@@ -263,107 +291,122 @@ export default function TeacherQuizAnalytics() {
         </div>
       </div>
 
-      {/* 3. Student Table (ส่วนนี้หายไปในโค้ดเก่าของคุณ ผมเติมให้แล้ว!) */}
-      <div className="bg-[#1E293B] rounded-3xl border border-slate-700 shadow-2xl overflow-hidden">
-        <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex flex-col sm:flex-row justify-between items-center gap-4">
+      {/* 3. Students List & History Table */}
+      <div className="bg-[#1E293B] rounded-3xl border border-slate-700 shadow-xl overflow-hidden mt-8">
+        <div className="p-6 border-b border-slate-700 bg-slate-800/30 flex flex-col sm:flex-row items-center justify-between gap-4">
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-cyan-400" /> รายชื่อและผลการสอบรายคน
+            <Users className="w-5 h-5 text-indigo-400" /> ผลการสอบและประวัติรายบุคคล
           </h3>
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
             <input 
               type="text" 
-              placeholder="ค้นหารหัส หรือ ชื่อนักเรียน..." 
+              placeholder="ค้นหาชื่อ, รหัส, ห้อง..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-[#0F172A] border border-slate-700 rounded-2xl pl-12 pr-4 py-3 text-sm text-white focus:ring-2 focus:ring-cyan-500 outline-none transition-all"
+              className="w-full bg-[#0F172A] border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
             />
           </div>
         </div>
 
-        {/* Desktop View */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-800/50 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                <th className="p-6">รหัสนักเรียน</th>
-                <th className="p-6">ชื่อ-นามสกุล</th>
-                <th className="p-6">ห้อง</th>
-                <th className="p-6 text-center">สอบ (ครั้ง)</th>
-                <th className="p-6 text-center">ล่าสุด</th>
-                <th className="p-6 text-center text-amber-500">ดีที่สุด</th>
-                <th className="p-6 text-center">สถานะ</th>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-800/50 text-slate-400 text-xs font-bold uppercase tracking-wider">
+              <tr>
+                <th className="p-4 lg:p-5">รหัสนักเรียน</th>
+                <th className="p-4 lg:p-5">ชื่อ-นามสกุล</th>
+                <th className="p-4 lg:p-5 text-center">ห้องเรียน</th>
+                <th className="p-4 lg:p-5 text-center">สอบ (ครั้ง)</th>
+                <th className="p-4 lg:p-5 text-center text-emerald-400">คะแนนดีสุด</th>
+                <th className="p-4 lg:p-5 text-center text-indigo-400">เฉลี่ย</th>
+                <th className="p-4 lg:p-5 text-right">รายละเอียด</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-slate-800">
-              {filteredStudents.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-20 text-center text-slate-500 italic">ไม่พบข้อมูลนักเรียน</td>
-                </tr>
-              ) : (
-                filteredStudents.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-800/40 transition-colors group">
-                    <td className="p-6 font-mono text-cyan-400 font-bold">{s.student_id}</td>
-                    <td className="p-6 text-white font-bold">{s.name}</td>
-                    <td className="p-6 text-slate-400">{s.class_room}</td>
-                    <td className="p-6 text-center">
-                      <span className="bg-slate-700 text-slate-300 px-3 py-1 rounded-lg text-xs font-black">{s.attempts_count}</span>
-                    </td>
-                    <td className="p-6 text-center text-slate-300 font-mono">{s.latest_score}</td>
-                    <td className="p-6 text-center font-mono font-black text-lg text-white">{s.best_score}</td>
-                    <td className="p-6 text-center">
-                      {s.attempts_count === 0 ? (
-                        <span className="text-slate-600 text-[10px] uppercase font-bold tracking-widest">ยังไม่สอบ</span>
-                      ) : s.best_score >= 32 ? (
-                        <div className="flex items-center justify-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 text-xs font-black">
-                          <CheckCircle className="w-3.5 h-3.5" /> ผ่าน
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1.5 text-red-400 bg-red-500/10 px-3 py-1.5 rounded-xl border border-red-500/20 text-xs font-black">
-                          <XCircle className="w-3.5 h-3.5" /> ไม่ผ่าน
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+            <tbody className="divide-y divide-slate-800 text-sm">
+              {filteredStudents.length > 0 ? (
+                filteredStudents.map(s => (
+                  <React.Fragment key={s.id}>
+                    {/* Main Row */}
+                    <tr className={`transition-colors ${expandedStudentId === s.id ? 'bg-slate-800/40' : 'hover:bg-slate-800/20'}`}>
+                      <td className="p-4 lg:p-5 font-mono text-cyan-400 font-bold">{s.student_id}</td>
+                      <td className="p-4 lg:p-5 text-white font-medium">{s.name}</td>
+                      <td className="p-4 lg:p-5 text-center text-slate-400">{s.class_room}</td>
+                      <td className="p-4 lg:p-5 text-center">
+                        <span className="bg-slate-800 text-slate-300 px-3 py-1 rounded-full text-xs font-bold">{s.attempts_count}</span>
+                      </td>
+                      <td className="p-4 lg:p-5 text-center font-bold text-lg text-white">
+                        {s.best_score}
+                      </td>
+                      <td className="p-4 lg:p-5 text-center font-bold text-indigo-300">
+                        {s.avg_score}
+                      </td>
+                      <td className="p-4 lg:p-5 text-right">
+                        <button 
+                          onClick={() => toggleStudentExpand(s.id)}
+                          disabled={s.attempts_count === 0}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-lg transition-all text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          {expandedStudentId === s.id ? 'ปิดประวัติ' : 'ดูประวัติ'} 
+                          {expandedStudentId === s.id ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+                        </button>
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded History Row */}
+                    {expandedStudentId === s.id && (
+                      <tr>
+                        <td colSpan={7} className="p-0 border-b border-slate-700">
+                          <div className="bg-[#0F172A] p-6 lg:p-8 shadow-inner animate-in slide-in-from-top-2 duration-200">
+                            <h4 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                              <History className="w-4 h-4 text-indigo-400" /> ประวัติการทำข้อสอบ ({s.history.length} ครั้ง)
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                              {s.history.map((attempt, idx) => (
+                                <div key={attempt.attempt_id} className={`p-4 rounded-2xl border ${attempt.passed ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'} relative overflow-hidden group`}>
+                                  
+                                  <div className="flex justify-between items-start mb-3">
+                                    <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">รอบที่ {s.history.length - idx}</span>
+                                    <span className={`text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider ${attempt.passed ? 'text-emerald-400 bg-emerald-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                                      {attempt.passed ? 'ผ่าน' : 'ไม่ผ่าน'}
+                                    </span>
+                                  </div>
+
+                                  <div className="mb-4">
+                                    <div className="flex items-baseline gap-1">
+                                      <span className={`text-3xl font-black ${attempt.passed ? 'text-emerald-400' : 'text-red-400'}`}>{attempt.score}</span>
+                                      <span className="text-sm text-slate-500 font-medium">/{attempt.total_score}</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-1.5 text-[11px] text-slate-400">
+                                    <div className="flex items-center gap-2">
+                                      <Calendar className="w-3.5 h-3.5 opacity-70" />
+                                      {formatDate(attempt.created_at)}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-3.5 h-3.5 opacity-70" />
+                                      ใช้เวลา: {formatTime(attempt.time_spent_seconds)}
+                                    </div>
+                                  </div>
+
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-slate-500 italic">
+                    ไม่พบข้อมูลนักเรียน
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
-        </div>
-
-        {/* Mobile View */}
-        <div className="md:hidden divide-y divide-slate-800">
-          {filteredStudents.map((s) => (
-            <div key={s.id} className="p-5 space-y-4 hover:bg-slate-800/30 transition-colors">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="text-[10px] font-mono text-cyan-500 font-bold mb-0.5">{s.student_id}</div>
-                  <div className="text-white font-bold">{s.name}</div>
-                  <div className="text-xs text-slate-500">{s.class_room}</div>
-                </div>
-                {s.attempts_count > 0 && (
-                   <div className={`text-xs font-black px-2 py-1 rounded-lg ${s.best_score >= 32 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                     {s.best_score >= 32 ? 'PASS' : 'FAIL'}
-                   </div>
-                )}
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center bg-[#0F172A] p-3 rounded-2xl border border-slate-800">
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">สอบ</div>
-                  <div className="text-white font-black">{s.attempts_count}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">ล่าสุด</div>
-                  <div className="text-white font-black">{s.latest_score}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">ดีสุด</div>
-                  <div className="text-white font-black">{s.best_score}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-          {filteredStudents.length === 0 && <div className="p-10 text-center text-slate-600">ไม่พบข้อมูล</div>}
         </div>
       </div>
 
@@ -417,7 +460,7 @@ export default function TeacherQuizAnalytics() {
             {resetModal.step === 'result' && (
               <>
                 <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6 border ${resetModal.resultType === 'success' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
-                  {resetModal.resultType === 'success' ? <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500" /> : <AlertCircle className="w-7 h-7 sm:w-8 sm:h-8 text-red-500" />}
+                  {resetModal.resultType === 'success' ? <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-500" /> : <XCircle className="w-7 h-7 sm:w-8 sm:h-8 text-red-500" />}
                 </div>
                 <h3 className="text-lg sm:text-xl font-bold text-white text-center mb-2">{resetModal.resultType === 'success' ? 'สำเร็จ' : 'เกิดข้อผิดพลาด'}</h3>
                 <p className="text-slate-400 text-center text-xs sm:text-sm mb-6 sm:mb-8">{resetModal.resultMessage}</p>

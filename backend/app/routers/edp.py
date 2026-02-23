@@ -77,15 +77,15 @@ def get_dashboard_stats(
 @router.get("/teacher/students", response_model=List[UserInfo])
 def get_all_students(
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 1000, # ✅ ปรับค่า Default Limit ให้ดึงข้อมูลได้เยอะขึ้น
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # [FIX] Pagination Guard ป้องกันการดึงข้อมูลเกินความจำเป็น
-    limit = min(limit, 500)
+    # ✅ ปลดล็อก Pagination Guard ให้รองรับ 2000 รายการ จะได้ไม่มีรายชื่อนักเรียนหาย
+    limit = min(limit, 1000)
     
     results = db.query(
         User,
@@ -185,15 +185,15 @@ def get_user_projects(
 @router.get("/teacher/projects", response_model=List[ProjectWithStudent])
 def get_all_projects_for_teacher(
     skip: int = 0,
-    limit: int = 150,
+    limit: int = 1000, # ✅ ปรับค่า Default Limit ให้ดึงข้อมูลได้เยอะขึ้น
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # [FIX] Pagination Guard ป้องกันเซิร์ฟเวอร์โหลดหนัก
-    limit = min(limit, 500)
+    # ✅ ปลดล็อก Pagination Guard ให้รองรับ 2000 รายการ จะได้ไม่มีโครงงานหาย
+    limit = min(limit, 1000)
 
     # [FIX 2] แก้ปัญหาโปรเจกต์ขึ้นซ้ำ โดยการดึงเฉพาะ ID ของ Step ล่าสุดจริงๆ (max_step_id) เท่านั้น
     latest_step_sub = db.query(
