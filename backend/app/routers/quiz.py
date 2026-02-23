@@ -13,8 +13,7 @@ router = APIRouter(prefix="/quiz", tags=["Quiz"])
 
 # --- Schemas ---
 class QuizSubmission(BaseModel):
-    # [FIX] เปลี่ยนจากส่ง Index เป็นส่งข้อความ Text ของตัวเลือกมาเลย
-    answers: Dict[int, str] # { question_id: "ข้อความตัวเลือกที่เด็กเลือก" }
+    answers: Dict[int, str] 
     time_spent_seconds: int
 
 # --- Endpoints (Student) ---
@@ -26,14 +25,13 @@ def get_quiz_questions(db: Session = Depends(get_db)):
     
     result = []
     for q in questions:
-        # ดึงตัวเลือกมาสับเปลี่ยนให้มั่ว
         shuffled_choices = list(q.choices)
         random.shuffle(shuffled_choices)
         
         result.append({
             "id": q.id,
             "question_text": q.question_text,
-            "choices": shuffled_choices, # ส่งตัวเลือกที่มั่วแล้วไปให้
+            "choices": shuffled_choices, 
             "order": q.order,
             "category": q.category
         })
@@ -52,24 +50,20 @@ def submit_quiz(
     total_score = len(questions)
     log = []
 
-    # ตรวจคำตอบแบบเอา Text มาเทียบกันตรงๆ
     for q_id, selected_text in submission.answers.items():
         q_id = int(q_id)
         question = question_map.get(q_id)
         
         if question:
-            # หาข้อความที่เป็นคำตอบที่ถูกต้องจาก DB
             correct_text = question.choices[question.correct_choice_index]
-            
-            # ถ้าเด็กเลือกข้อความตรงกับเฉลย ถือว่าถูก
             is_correct = (selected_text == correct_text)
             if is_correct:
                 score += 1
             
             log.append({
                 "question_id": q_id,
-                "selected_text": selected_text, # บันทึกเป็น Text
-                "correct_text": correct_text,   # บันทึกเป็น Text
+                "selected_text": selected_text, 
+                "correct_text": correct_text,   
                 "is_correct": is_correct,
                 "category": question.category
             })
@@ -139,10 +133,8 @@ def get_quiz_attempt_details(
         "details": attempt.answers_log or []
     }
 
-
 @router.get("/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
-    # ดึงการสอบทั้งหมดเรียงตามคะแนน(มากไปน้อย) -> เวลาที่ใช้(น้อยไปมาก) -> สอบก่อนได้ก่อน
     all_attempts = db.query(QuizAttempt, User).join(User, QuizAttempt.student_id == User.id).order_by(
         QuizAttempt.score.desc(),
         QuizAttempt.time_spent_seconds.asc(),
@@ -152,7 +144,6 @@ def get_leaderboard(db: Session = Depends(get_db)):
     seen_students = set()
     leaderboard = []
     
-    # [FIX] วนลูปและเพิ่มเฉพาะการสอบ "ครั้งที่ดีที่สุด" ของนักเรียนแต่ละคนเท่านั้น
     for attempt, user in all_attempts:
         if user.id not in seen_students:
             seen_students.add(user.id)
@@ -164,7 +155,6 @@ def get_leaderboard(db: Session = Depends(get_db)):
                 "time_spent": attempt.time_spent_seconds,
                 "submitted_at": attempt.created_at
             })
-            # ครบ 20 คน (ที่เป็น Unique User) ก็หยุดได้เลย
             if len(leaderboard) >= 20:
                 break
     
@@ -244,12 +234,23 @@ def get_student_analytics(db: Session = Depends(get_db)):
                 "latest_score": 0,
                 "avg_score": 0,
                 "total_score_sum": 0,
-                "latest_attempt_at": att.created_at
+                "latest_attempt_at": att.created_at,
+                "history": [] # ✅ จุดสำคัญ: แนบประวัติการสอบไปให้ Frontend
             }
         
         s = student_map[sid]
         s['attempts_count'] += 1
         s['total_score_sum'] += att.score
+        
+        # ✅ เก็บข้อมูลการสอบรายครั้งเข้าไปใน history
+        s['history'].append({
+            "attempt_id": att.id,
+            "score": att.score,
+            "total_score": att.total_score,
+            "passed": att.passed,
+            "time_spent_seconds": att.time_spent_seconds,
+            "created_at": att.created_at
+        })
         
         if att.score > s['best_score']:
             s['best_score'] = att.score
@@ -261,7 +262,11 @@ def get_student_analytics(db: Session = Depends(get_db)):
     results = []
     for s in student_map.values():
         s['avg_score'] = round(s['total_score_sum'] / s['attempts_count'], 2) if s['attempts_count'] > 0 else 0
-        del s['total_score_sum']
+        if 'total_score_sum' in s:
+            del s['total_score_sum']
+            
+        # จัดเรียงจากสอบล่าสุด -> ไปหาเก่าสุด
+        s['history'].sort(key=lambda x: x['created_at'], reverse=True)
         results.append(s)
     
     return sorted(results, key=lambda x: x['student_id'])
