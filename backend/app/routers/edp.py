@@ -77,7 +77,7 @@ def get_dashboard_stats(
 @router.get("/teacher/students", response_model=List[UserInfo])
 def get_all_students(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -185,7 +185,7 @@ def get_user_projects(
 @router.get("/teacher/projects", response_model=List[ProjectWithStudent])
 def get_all_projects_for_teacher(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 150,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
