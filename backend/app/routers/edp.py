@@ -4,7 +4,8 @@ from sqlalchemy import desc, func, distinct, case, and_
 from datetime import datetime, timezone, timedelta 
 from typing import List
 from app.database import get_db
-from app.models.edp import EdpStep, Project, User
+# ✅ เพิ่ม QuizAttempt เข้ามาในการ Import ด้านล่างนี้
+from app.models.edp import EdpStep, Project, User, QuizAttempt
 from app.schemas.edp import (
     StepCreate, StepResponse, ProjectCreate, ProjectWithStudent, 
     TeacherGrade, StudentUpdate, UserInfo, DashboardStats
@@ -136,16 +137,38 @@ def delete_student(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    # ตรวจสอบสิทธิ์ว่าต้องเป็นครูเท่านั้น
     if current_user.role != 'teacher':
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied: เฉพาะครูเท่านั้นที่สามารถลบข้อมูลนักเรียนได้")
         
     student = db.query(User).filter(User.id == student_id, User.role == 'student').first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
         
-    db.delete(student)
-    db.commit()
-    return {"message": "Student deleted successfully"}
+    try:
+        # ✅ 1. ลบประวัติการสอบ (QuizAttempt) ของนักเรียนคนนี้ทั้งหมด
+        db.query(QuizAttempt).filter(QuizAttempt.student_id == student.id).delete(synchronize_session=False)
+        
+        # ✅ 2. ค้นหาโครงงาน (Project) ทั้งหมดของนักเรียน
+        projects = db.query(Project).filter(Project.owner_id == student.id).all()
+        project_ids = [p.id for p in projects]
+        
+        if project_ids:
+            # ✅ 3. ลบขั้นตอนงาน (EdpStep) ที่ผูกอยู่กับโครงงานทั้งหมดของเด็กคนนี้
+            db.query(EdpStep).filter(EdpStep.project_id.in_(project_ids)).delete(synchronize_session=False)
+            
+            # ✅ 4. ลบโครงงาน (Project)
+            db.query(Project).filter(Project.owner_id == student.id).delete(synchronize_session=False)
+            
+        # ✅ 5. ลบบัญชีนักเรียน (User) ออกจากระบบเป็นขั้นตอนสุดท้าย
+        db.delete(student)
+        db.commit()
+        return {"message": "ลบบัญชีนักเรียนและข้อมูลที่เกี่ยวข้องทั้งหมดเรียบร้อยแล้ว"}
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting student: {e}")
+        raise HTTPException(status_code=500, detail="เกิดข้อผิดพลาดระดับเซิร์ฟเวอร์ ไม่สามารถลบข้อมูลนักเรียนได้")
 
 # ==========================================
 # 🚀 PROJECT & EDP ENDPOINTS
@@ -247,9 +270,18 @@ def delete_project(
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
         
-    db.delete(project)
-    db.commit()
-    return {"message": "Project deleted successfully"}
+    try:
+        # ✅ ลบข้อมูลขั้นตอนการทำงาน (EdpStep) ของโครงงานนี้ทิ้งก่อนลบโปรเจกต์
+        db.query(EdpStep).filter(EdpStep.project_id == project.id).delete(synchronize_session=False)
+        
+        # ลบโครงงาน
+        db.delete(project)
+        db.commit()
+        return {"message": "Project deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting project: {e}")
+        raise HTTPException(status_code=500, detail="ไม่สามารถลบโครงงานได้")
 
 @router.post("/submit", response_model=StepResponse)
 async def submit_edp_step(
