@@ -12,7 +12,6 @@ from app.database import get_db
 from app.models.edp import User
 from app.core import security
 
-# ✅ Import จาก config ที่เดียว — ลบ hardcode ทิ้งทั้งหมด
 from app.core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -27,21 +26,10 @@ class UserRegister(BaseModel):
     last_name: str
     class_room: str
 
-# [NEW] Schema สำหรับอัปเดตโปรไฟล์
 class ProfileUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     class_room: Optional[str] = None
-
-# --- Internal Functions ---
-def create_access_token_local(data: dict, expires_delta: Optional[timedelta] = None):
-    """ใช้ SECRET_KEY เดียวกับทั้งระบบ"""
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (
-        expires_delta or timedelta(minutes=15)
-    )
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -64,9 +52,12 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
 
-    # Update last active time
-    user.last_active_at = datetime.now(timezone.utc)
-    db.commit()
+    # [OPTIMIZED] อัปเดต last_active_at เฉพาะเมื่อผ่านไปแล้วอย่างน้อย 1 นาที
+    # ช่วยลดภาระ Database มหาศาลเมื่อมีนักเรียนใช้งานพร้อมกันเยอะๆ
+    now = datetime.now(timezone.utc)
+    if user.last_active_at is None or (now - user.last_active_at).total_seconds() > 60:
+        user.last_active_at = now
+        db.commit()
 
     return user
 
@@ -102,14 +93,14 @@ def login(
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="อีเมลหรือรหัสผ่านไม่ถูกต้อง")
 
-    access_token = create_access_token_local(
+    # [CLEAN CODE] ในฟังก์ชันสร้าง Token มีค่า Default ของ EXP อยู่แล้ว ตัดทิ้งให้โค้ดสั้นลงได้
+    access_token = security.create_access_token(
         data={
             "sub": user.email,
             "role": user.role,
             "id": user.id,
             "name": f"{user.first_name} {user.last_name}"
-        },
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        }
     )
     return {
         "access_token": access_token,
@@ -117,7 +108,6 @@ def login(
         "role": user.role
     }
 
-# [NEW] Endpoint ดึงข้อมูลตัวเอง
 @router.get("/me")
 def get_my_profile(current_user: User = Depends(get_current_user)):
     return {
@@ -128,7 +118,6 @@ def get_my_profile(current_user: User = Depends(get_current_user)):
         "class_room": current_user.class_room
     }
 
-# [NEW] Endpoint อัปเดตข้อมูลตัวเอง
 @router.patch("/profile")
 def update_my_profile(
     profile_data: ProfileUpdate,
