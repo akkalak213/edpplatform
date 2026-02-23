@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
 import { 
@@ -98,9 +98,7 @@ export default function TeacherDashboard() {
     isOpen: false, title: '', message: '', type: 'success'
   });
 
-  // [FIXED] ใช้ useRef เพื่อเก็บ fetchData ป้องกันการสร้างฟังก์ชันใหม่ พร้อมใส่ initial value เป็น null
-  const fetchRef = useRef<(() => void) | null>(null);
-
+  // [FIXED] ใช้ fetchData โดยตรงใน useCallback ไม่ต้องใช้ useRef ให้ซับซ้อน
   const fetchData = useCallback(async () => {
     try {
       const [resStats, resStudents, resProjects] = await Promise.all([
@@ -118,22 +116,15 @@ export default function TeacherDashboard() {
     }
   }, []);
 
-  // อัปเดต ref ทุกครั้งที่ render
   useEffect(() => {
-    fetchRef.current = fetchData;
-  });
-
-  useEffect(() => {
-    // รันครั้งแรก
-    if (fetchRef.current) fetchRef.current();
+    // รันครั้งแรกเมื่อโหลดหน้า
+    fetchData();
     
-    // ตั้ง interval
-    const interval = setInterval(() => {
-      if (fetchRef.current) fetchRef.current();
-    }, 10000); 
+    // ตั้ง interval ให้ดึงข้อมูลอัตโนมัติทุก 10 วินาที
+    const interval = setInterval(fetchData, 10000); 
 
     return () => clearInterval(interval);
-  }, []); 
+  }, [fetchData]); 
 
   const handleLogout = () => {
     localStorage.removeItem('token');

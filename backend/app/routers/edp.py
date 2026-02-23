@@ -83,6 +83,9 @@ def get_all_students(
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
     
+    # [FIX] Pagination Guard ป้องกันการดึงข้อมูลเกินความจำเป็น
+    limit = min(limit, 500)
+    
     results = db.query(
         User,
         func.count(distinct(Project.id)).label("project_count"),
@@ -165,6 +168,9 @@ def get_all_projects_for_teacher(
 ):
     if current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
+
+    # [FIX] Pagination Guard ป้องกันเซิร์ฟเวอร์โหลดหนัก
+    limit = min(limit, 500)
 
     # [FIX 2] แก้ปัญหาโปรเจกต์ขึ้นซ้ำ โดยการดึงเฉพาะ ID ของ Step ล่าสุดจริงๆ (max_step_id) เท่านั้น
     latest_step_sub = db.query(
@@ -252,6 +258,10 @@ async def submit_edp_step(
     ai_service: GeminiService = Depends(get_ai_service),
     current_user: User = Depends(get_current_user)
 ):
+    # [FIX] Guard ป้องกัน Step เกิน 6
+    if step.step_number < 1 or step.step_number > 6:
+        raise HTTPException(status_code=400, detail="Invalid step number. Must be between 1 and 6.")
+
     project = db.query(Project).filter(Project.id == step.project_id).first()
     
     if not project:
@@ -260,10 +270,15 @@ async def submit_edp_step(
     if project.owner_id != current_user.id and current_user.role != 'teacher':
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # ดึงงานล่าสุดของด่านนี้มาเทียบ
+    # ดึงงานล่าสุดของ *ด่านนี้* มาเทียบ (เพื่อดูเรื่องสแปมข้อความเดิม)
     last_step = db.query(EdpStep).filter(
         EdpStep.project_id == step.project_id,
         EdpStep.step_number == step.step_number
+    ).order_by(desc(EdpStep.created_at)).first()
+
+    # ดึงงานล่าสุดของ *โปรเจกต์นี้ทั้งหมด* เพื่อใช้เช็ค Cycle ทับซ้อน
+    absolute_latest_step = db.query(EdpStep).filter(
+        EdpStep.project_id == step.project_id
     ).order_by(desc(EdpStep.created_at)).first()
 
     if last_step:
@@ -278,6 +293,8 @@ async def submit_edp_step(
         if last_step.created_at:
             now = datetime.now(timezone.utc)
             last_step_time = last_step.created_at
+            
+            # ป้องกันปัญหา Race Condition timezone-aware vs timezone-naive
             if last_step_time.tzinfo is None:
                 last_step_time = last_step_time.replace(tzinfo=timezone.utc)
             
@@ -288,6 +305,13 @@ async def submit_edp_step(
     # --- AI Analysis ---
     analysis = await ai_service.analyze_step(step.step_number, step.content)
     
+    # [FIX 2] เช็คการนับ attempt_count ทับซ้อนในกรณีขึ้น Cycle ใหม่
+    # ถ้าด่านล่าสุดสุดที่เพิ่งทำ ไม่ใช่ด่านนี้ แสดงว่าเด็กวน Cycle กลับมาทำด่านนี้ใหม่ ให้เริ่มนับ attempt = 1 
+    if absolute_latest_step and absolute_latest_step.step_number != step.step_number:
+        current_attempt = 1
+    else:
+        current_attempt = (last_step.attempt_count + 1) if last_step else 1
+
     new_step = EdpStep(
         project_id=step.project_id,
         step_number=step.step_number,
@@ -306,11 +330,10 @@ async def submit_edp_step(
         suggested_action=analysis.get("suggested_action", ""),
         
         status="submitted",
-        word_count=len(step.content.split()) if step.content else 0
+        word_count=len(step.content.split()) if step.content else 0,
+        attempt_count=current_attempt  # ใช้ค่า attempt ที่คำนวณใหม่
     )
     
-    new_step.attempt_count = (last_step.attempt_count + 1) if last_step else 1
-
     db.add(new_step)
     db.commit()
     db.refresh(new_step)

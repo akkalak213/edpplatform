@@ -54,7 +54,7 @@ def seed_questions():
                     "ออกแบบที่นั่งให้มีที่กั้นแขนคั่นกลางระหว่างทุกที่นั่ง",
                     "เลือกใช้วัสดุที่แข็งและเก็บความเย็นเพื่อให้นั่งไม่สบาย"
                 ],
-                "correct_choice_index": 2, # ค.
+                "correct_choice_index": 3, # ง.
                 "category": "Originality"
             },
             {

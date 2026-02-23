@@ -87,12 +87,13 @@ export default function Dashboard() {
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardItem[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
+  // [FIX] เพิ่ม State ของ Logout กลับคืนมา
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   useEffect(() => {
     fetchProjects();
-    fetchLeaderboard();
     fetchProfile();
+    // นำ fetchLeaderboard() ออกจากที่นี่ เพื่อป้องกันการโหลดซ้ำซ้อน
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error') => {
@@ -659,7 +660,6 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* ✅ เปลี่ยนเป็น Dropdown แล้ว */}
                 <div>
                   <label className="block text-[10px] text-slate-400 font-medium ml-1 mb-1">ห้องเรียน</label>
                   <select 

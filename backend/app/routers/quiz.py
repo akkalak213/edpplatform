@@ -142,22 +142,31 @@ def get_quiz_attempt_details(
 
 @router.get("/leaderboard")
 def get_leaderboard(db: Session = Depends(get_db)):
-    results = db.query(QuizAttempt, User).join(User, QuizAttempt.student_id == User.id).order_by(
+    # ดึงการสอบทั้งหมดเรียงตามคะแนน(มากไปน้อย) -> เวลาที่ใช้(น้อยไปมาก) -> สอบก่อนได้ก่อน
+    all_attempts = db.query(QuizAttempt, User).join(User, QuizAttempt.student_id == User.id).order_by(
         QuizAttempt.score.desc(),
         QuizAttempt.time_spent_seconds.asc(),
         QuizAttempt.created_at.asc()
-    ).limit(20).all()
+    ).all()
 
+    seen_students = set()
     leaderboard = []
-    for attempt, user in results:
-        leaderboard.append({
-            "student_name": f"{user.first_name} {user.last_name}",
-            "class_room": user.class_room,
-            "score": attempt.score,
-            "total_score": attempt.total_score,
-            "time_spent": attempt.time_spent_seconds,
-            "submitted_at": attempt.created_at
-        })
+    
+    # [FIX] วนลูปและเพิ่มเฉพาะการสอบ "ครั้งที่ดีที่สุด" ของนักเรียนแต่ละคนเท่านั้น
+    for attempt, user in all_attempts:
+        if user.id not in seen_students:
+            seen_students.add(user.id)
+            leaderboard.append({
+                "student_name": f"{user.first_name} {user.last_name}",
+                "class_room": user.class_room,
+                "score": attempt.score,
+                "total_score": attempt.total_score,
+                "time_spent": attempt.time_spent_seconds,
+                "submitted_at": attempt.created_at
+            })
+            # ครบ 20 คน (ที่เป็น Unique User) ก็หยุดได้เลย
+            if len(leaderboard) >= 20:
+                break
     
     return leaderboard
 

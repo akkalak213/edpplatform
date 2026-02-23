@@ -29,6 +29,7 @@ class GeminiService:
         # ใช้ OrderedDict เพื่อจำกัดขนาดและตัดข้อมูลเก่าออกเมื่อเต็ม (LRU Concept)
         self._cache = OrderedDict()
         self._cache_limit = 1000 
+        self._cache_lock = asyncio.Lock() # [FIX] เพิ่ม Lock เพื่อให้ Thread-safe
 
     def _get_cache_key(self, step_number: int, content: str) -> str:
         """สร้าง Key สำหรับ Cache โดยใช้ MD5 Hash ของข้อความเพื่อประหยัดพื้นที่"""
@@ -46,13 +47,14 @@ class GeminiService:
                 "warning_flags": ["too_short"]
             }
 
-        # [ADDED] Check Cache: ถ้าเคยวิเคราะห์ข้อความนี้แล้ว ให้คืนค่าเดิมทันที
+        # [ADDED & FIX] Check Cache แบบ Thread-safe
         cache_key = self._get_cache_key(step_number, content)
-        if cache_key in self._cache:
-            # ย้าย key ไปท้ายสุด (Mark as recently used)
-            self._cache.move_to_end(cache_key)
-            print(f"♻️  Gemini Cache Hit for Step {step_number}")
-            return self._cache[cache_key]
+        async with self._cache_lock:
+            if cache_key in self._cache:
+                # ย้าย key ไปท้ายสุด (Mark as recently used)
+                self._cache.move_to_end(cache_key)
+                print(f"♻️  Gemini Cache Hit for Step {step_number}")
+                return self._cache[cache_key]
 
         # 2. Rubric Definition (เกณฑ์การให้คะแนนฉบับเต็ม)
         rubrics = {
@@ -137,11 +139,12 @@ class GeminiService:
         try:
             result = await self._generate_with_retry_and_limit(prompt)
             
-            # [ADDED] Save to Cache
-            self._cache[cache_key] = result
-            # ถ้า Cache เต็ม ให้ลบตัวเก่าสุดออก (FIFO/LRU)
-            if len(self._cache) > self._cache_limit:
-                self._cache.popitem(last=False)
+            # [FIX] Save to Cache แบบ Thread-safe
+            async with self._cache_lock:
+                self._cache[cache_key] = result
+                # ถ้า Cache เต็ม ให้ลบตัวเก่าสุดออก (FIFO/LRU)
+                if len(self._cache) > self._cache_limit:
+                    self._cache.popitem(last=False)
                 
             return result
 

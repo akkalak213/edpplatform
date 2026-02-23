@@ -26,16 +26,18 @@ def get_overview(db: Session = Depends(get_db)):
     avg_score = db.query(func.avg(EdpStep.score)).scalar() or 0
     
     # 3. สุขภาพจิตผู้เรียน (Sentiment Analysis)
+    # [FIX] เปลี่ยนจาก != None เป็น .isnot(None) เพื่อหลีกเลี่ยง Warning และบั๊กในบาง Database
     sentiment_stats = db.query(
         EdpStep.sentiment, 
         func.count(EdpStep.id)
-    ).filter(EdpStep.sentiment != None).group_by(EdpStep.sentiment).all()
+    ).filter(EdpStep.sentiment.isnot(None)).group_by(EdpStep.sentiment).all()
 
     # 4. การกระจายตัวของสมรรถนะ (Competency Levels)
+    # [FIX] เปลี่ยนจาก != None เป็น .isnot(None) 
     competency_stats = db.query(
         EdpStep.competency_level,
         func.count(EdpStep.id)
-    ).filter(EdpStep.competency_level != None).group_by(EdpStep.competency_level).all()
+    ).filter(EdpStep.competency_level.isnot(None)).group_by(EdpStep.competency_level).all()
 
     return {
         "progress_chart": {f"Step {s.step_number}": s.total for s in step_stats},

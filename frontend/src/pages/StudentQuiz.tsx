@@ -57,9 +57,11 @@ export default function StudentQuiz() {
   const [cheatingDetected, setCheatingDetected] = useState(false);
   const isQuizActiveRef = useRef(false);
 
+  // [FIX 1] แก้ไขเงื่อนไข Anti-cheat: เพิ่ม cheatingDetected เป็น dependency
+  // และป้องกันไม่ให้ระบบจับผิดทุจริตถ้านักเรียนสอบเสร็จแล้ว (quizFinished = true)
   useEffect(() => {
-    isQuizActiveRef.current = quizStarted && !quizFinished;
-  }, [quizStarted, quizFinished]);
+    isQuizActiveRef.current = quizStarted && !quizFinished && !cheatingDetected;
+  }, [quizStarted, quizFinished, cheatingDetected]);
 
   useEffect(() => {
     const handleViolation = () => {
@@ -169,6 +171,9 @@ export default function StudentQuiz() {
   };
 
   const handleNext = () => {
+    // [FIX 2] เพิ่มการเช็คสถานะ submitting ป้องกันการกดปุ่มถัดไป/ปุ่มส่งรัวๆ
+    if (submitting) return;
+
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex(prev => prev + 1);
       setIsLocked(false); 
@@ -217,7 +222,7 @@ export default function StudentQuiz() {
 
   if (cheatingDetected) {
     return (
-      <div className="fixed inset-0 z-[100] bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+      <div className="fixed inset-0 z-100 bg-red-950/95 backdrop-blur-xl flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
         <div className="bg-[#1E293B] border-2 border-red-500 rounded-3xl p-8 max-w-md w-full text-center shadow-[0_0_50px_rgba(239,68,68,0.5)]">
           <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
             <XCircle className="w-12 h-12 text-red-500" />
@@ -245,7 +250,7 @@ export default function StudentQuiz() {
     return (
       <div className="min-h-screen bg-[#020617] text-slate-300 flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-[#1E293B] border border-slate-700 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-cyan-500 to-blue-600"></div>
+          <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-cyan-500 to-blue-600"></div>
           
           <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-400">
             <Trophy className="w-10 h-10" />
@@ -427,10 +432,10 @@ export default function StudentQuiz() {
               <button 
                 onClick={handleNext}
                 disabled={submitting}
-                className={`flex-[2] py-4 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2
+                className={`flex-2 py-4 text-white rounded-xl font-bold shadow-lg transition-all flex items-center justify-center gap-2
                   ${isLastQuestion 
                     ? 'bg-green-600 hover:bg-green-500 shadow-green-500/20' 
-                    : 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-500/20'}
+                    : 'bg-linear-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 shadow-cyan-500/20'}
                 `}
               >
                 {isLastQuestion ? (
@@ -445,7 +450,7 @@ export default function StudentQuiz() {
       </footer>
 
       {showExitConfirm && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-100 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
           <div className="bg-[#1E293B] border border-slate-700 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <LogOut className="w-8 h-8 text-amber-500" />
